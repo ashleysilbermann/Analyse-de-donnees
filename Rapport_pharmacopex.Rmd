@@ -1,0 +1,73 @@
+---
+title: "Rapport d'analyses statistiques"
+subtitle: "Laboratoire Pharmacopex"
+author: "Groupe 1"
+date: "`r Sys.Date()`"
+documentclass: article
+classoption: oneside
+output: 
+  pdf_document: 
+    toc: true 
+    toc_depth: 3
+    number_sections: true 
+    fig_caption: true
+    latex_engine: xelatex
+params: 
+  afficher_code: false
+header-includes:
+  - \usepackage{xcolor}
+  - \usepackage{titlesec}
+  - \definecolor{bleufonce}{HTML}{17365D}
+  - \definecolor{bleuclair}{HTML}{2874A6}
+  - \definecolor{grisfonce}{HTML}{555555}
+  - \titleformat{\section}{\Large\bfseries\color{bleufonce}}{\thesection}{1em}{}
+  - \titleformat{\subsection}{\large\bfseries\color{bleuclair}}{\thesubsection}{1em}{}
+  - \titleformat{\subsubsection}{\normalsize\bfseries\color{grisfonce}}{\thesubsubsection}{1em}{}
+---    
+
+```{r setup, include=FALSE}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+
+knitr::opts_chunk$set(
+  echo = params$afficher_code,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 7,
+  fig.height = 4.5
+)
+```
+\newpage
+
+# Introduction générale
+
+Le laboratoire Pharmacopex souhaite étudier plusieurs problématiques statistiques liées au contrôle qualité.
+
+# MSA – Analyse des systèmes de mesure
+
+## Présentation de la méthode
+
+## Analyse A – Concentration en antigène
+
+### Présentation des données
+
+### Statistiques descriptives
+
+### Analyse de variance (ANOVA)
+
+### Vérification des hypothèses
+
+### Gage R&R
+
+### Interprétation et recommandations
+
+## Analyse B – Teneur en adjuvant
+
+## Analyse C – Activité immunologique
+
+## Analyse D – Protéines totales
+
+## Analyse E – Conservateur par HPLC-UV
