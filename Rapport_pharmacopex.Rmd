@@ -30,6 +30,7 @@ library(readxl)
 library(dplyr)
 library(ggplot2)
 library(knitr)
+library(SixSigma)
 
 knitr::opts_chunk$set(
   echo = params$afficher_code,
@@ -37,9 +38,20 @@ knitr::opts_chunk$set(
   message = FALSE,
   fig.align = "center",
   fig.width = 7,
-  fig.height = 4.5
+  fig.height = 4.5,
+  out.width = "100%"
 )
 ```
+```{r import-msa}
+chemin <- "C:/Users/Ashley/Documents/Analyse de données/"
+
+MSA_A <- read_excel(paste0(chemin, "Groupe_n1_s2_MSA_Analyse_A_2627.xlsx"))
+MSA_B <- read_excel(paste0(chemin, "Groupe_n1_s2_MSA_Analyse_B_2627.xlsx"))
+MSA_C <- read_excel(paste0(chemin, "Groupe_n1_s2_MSA_Analyse_C_2627.xlsx"))
+MSA_D <- read_excel(paste0(chemin, "Groupe_n1_s2_MSA_Analyse_D_2627.xlsx"))
+MSA_E <- read_excel(paste0(chemin, "Groupe_n1_s2_MSA_Analyse_E_2627.xlsx"))
+```
+
 \newpage
 
 # Introduction générale
@@ -54,15 +66,258 @@ Le laboratoire Pharmacopex souhaite étudier plusieurs problématiques statistiq
 
 ### Présentation des données
 
+L'analyse A porte sur la mesure de la concentration en antigène.
+L'étude est réalisée selon un plan expérimental comprenant :
+
+- **4 lots** : A616L, A752U, R337W et Y245N ;
+- **3 techniciens** : Lucas, Robin et Romane ;
+- **2 répétitions** par lot et par technicien ;
+- **24 mesures** au total (4 $\times$ 3 $\times$ 2).
+
+La méthode de mesure étant non destructive, un même échantillon peut être analysé plusieurs fois par différents techniciens sans être consommé lors de la mesure.
+```{r msa-a-preparation}
+data_A <- MSA_A %>%
+  mutate(
+    Technicien = factor(Technicien),
+    lots = factor(lots),
+    Runs = factor(Runs)
+  )
+
+kable(data_A, caption = "Données expérimentales de l'analyse A")
+```
+Le plan expérimental est donc **croisé et équilibré**, sous réserve que les mêmes échantillons soient utilisés par chaque technicien.
+
+Cette configuration permet d'évaluer :
+
+- **La répétabilité** : variabilité des mesures réalisées par un même technicien sur un même échantillon.
+- **La reproductibilité** : variabilité des mesures entre les différents techniciens.
+- **La variabilité inter-lots** : différences de concentration en antigène entre les lots.
+- **L'interaction lot $\times$ technicien** : influence éventuelle du lot sur les différences de mesure entre les techniciens.
+
+\textcolor{red}{Le caractère non destructif des mesures justifie ainsi l'utilisation d'une étude Gage R\&R croisée, associée à une analyse de variance à deux facteurs avec interaction.}
+
 ### Statistiques descriptives
+```{r msa-a-statistiques}
+stat_A <- data_A %>%
+  group_by(Technicien) %>%
+  summarise(
+    Effectif = n(),
+    Moyenne = mean(Resultat),
+    Ecart_type = sd(Resultat),
+    Minimum = min(Resultat),
+    Maximum = max(Resultat)
+  )
+
+kable(stat_A, digits = 3,
+      caption = "Statistiques descriptives par technicien")
+```
+
+```{r msa-a-graphique, fig.cap="Distribution des résultats par lot et par technicien"}
+ggplot(data_A, aes(x = lots, y = Resultat,
+                   color = Technicien)) +
+  geom_point(size = 3) +
+  theme_bw() +
+  labs(
+    x = "Lots",
+    y = "Concentration en antigène (%)",
+    color = "Technicien"
+  )
+```
+**Comparaison des résultats entre les techniciens**
+
+- Les concentrations en antigène obtenues par les trois techniciens sont relativement proches.
+- Les mesures réalisées sur un même lot présentent une faible dispersion.
+- Aucun technicien ne semble présenter de décalage systématique par rapport aux autres.
+
+Ces premières observations suggèrent une bonne concordance entre les résultats obtenus par Lucas, Robin et Romane.
+
+**Comparaison des résultats entre les lots**
+
+- Le lot A616L présente les concentrations en antigène les plus faibles.
+- Les lots A752U et Y245N présentent des concentrations intermédiaires.
+- Le lot R337W présente les concentrations en antigène les plus élevées.
+
+La variabilité observée entre les différents lots semble plus importante que celle observée entre les techniciens pour un même lot.
+
+**Respect des spécifications**
+
+L'ensemble des concentrations mesurées est compris dans l'intervalle de spécification fixé entre 95 et 105 \%. Toutes les mesures sont donc conformes aux spécifications établies.
+
+\textcolor{red}{Les statistiques descriptives suggèrent que la variabilité des résultats provient principalement des différences entre les lots plutôt que des différences entre les techniciens. La faible dispersion des mesures pour un même lot constitue un premier indicateur favorable concernant la répétabilité et la reproductibilité du système de mesure. Ces observations devront être confirmées par l'ANOVA et l'étude Gage R\&R.}
 
 ### Analyse de variance (ANOVA)
+Une analyse de variance à deux facteurs avec interaction
+est réalisée afin d'étudier les effets du lot, du technicien
+et de leur interaction sur les résultats de mesure.
+
+```{r msa-a-anova}
+anova_A <- aov(Resultat ~ lots * Technicien,
+               data = data_A)
+
+summary(anova_A)
+```
+**Influence du lot**
+
+- La valeur de F est de **563,144**.
+- La p-value est de **$3,6 \times 10^{-13}$**, donc largement inférieure à 0,05.
+- L'effet du lot est donc **hautement significatif**.
+
+Cela signifie que les résultats varient significativement d'un lot à l'autre. Le lot a donc une influence importante sur les valeurs mesurées.
+
+**Influence du technicien**
+
+- La valeur de F est de **0,668**.
+- La p-value est de **0,531**, donc supérieure à 0,05.
+- L'effet du technicien n'est **pas significatif**.
+
+Aucune différence statistiquement significative n'est mise en évidence entre les résultats obtenus par Lucas, Robin et Romane.
+
+**Interaction entre le lot et le technicien**
+
+- La valeur de F est de **0,439**.
+- La p-value est de **0,839**, donc supérieure à 0,05.
+- L'interaction lot $\times$ technicien n'est **pas significative**.
+
+Aucune interaction significative entre le lot et le technicien n'est mise en évidence. Les résultats suggèrent un comportement similaire des techniciens, quel que soit le lot analysé.
+
+\textcolor{red}{Ces résultats indiquent que les différences observées proviennent principalement des lots analysés. Aucun effet significatif du technicien ni de son interaction avec le lot n'est mis en évidence. Ces résultats sont encourageants concernant la reproductibilité du système de mesure, qui devra être confirmée par l'étude Gage R\&R.}
 
 ### Vérification des hypothèses
+```{r msa-a-normalite}
+shapiro_A <- shapiro.test(residuals(anova_A))
+
+tableau_shapiro_A <- data.frame(
+  Test = "Shapiro-Wilk",
+  W = shapiro_A$statistic,
+  "p-value" = shapiro_A$p.value,
+  check.names = FALSE
+)
+
+kable(tableau_shapiro_A,
+      digits = 4,
+      caption = "Test de normalité des résidus",
+      row.names = FALSE)
+```
+
+```{r msa-a-qqplot, fig.cap="QQ-plot des résidus"}
+qqnorm(residuals(anova_A),
+       main = "QQ-plot des résidus",
+       xlab = "Quantiles théoriques",
+       ylab = "Quantiles observés")
+
+qqline(residuals(anova_A), col = "red")
+```
+**Normalité des résidus**
+
+- La statistique W est de **0,97782**.
+- La p-value est de **0,8526**, donc supérieure à 0,05.
+- L'hypothèse de normalité des résidus n'est pas rejetée.
+
+Les points du QQ-plot sont globalement alignés sur la droite théorique, ce qui est cohérent avec le résultat du test de Shapiro-Wilk.
+
+\textcolor{red}{L'hypothèse de normalité des résidus est considérée comme acceptable pour cette analyse.}
 
 ### Gage R&R
+L'étude Gage R&R permet de quantifier la variabilité du système de mesure en distinguant la répétabilité,la reproductibilité et la variabilité entre les lots.
+
+```{r msa-a-gage, fig.width=12, fig.height=8, out.width="100%"}
+ss.rr(
+  var = Resultat,
+  part = lots,
+  appr = Technicien,
+  data = data_A,
+  tolerance = 10
+)
+```
+**Choix du modèle statistique**
+
+- La p-value de l'interaction lot $\times$ technicien est de **0,839**, donc supérieure à 0,05.
+- L'interaction n'est pas statistiquement significative.
+- Le modèle réduit, sans interaction, est donc retenu par la méthode utilisée.
+
+**Répétabilité**
+
+- La contribution de la répétabilité à la variance totale est de **0,86 \%**.
+- L'écart-type associé à la répétabilité est de **0,0412**.
+- Le pourcentage de variation d'étude est de **9,27 \%**.
+
+La variabilité des mesures réalisées par un même technicien sur un même échantillon est faible. La méthode présente donc une répétabilité satisfaisante.
+
+**Reproductibilité**
+
+- La contribution estimée de la reproductibilité est de **0,00 \%**.
+- La p-value associée à l'effet du technicien dans le modèle réduit est de **0,456**, donc supérieure à 0,05.
+
+Aucune variabilité significative liée aux techniciens n'est mise en évidence. Les résultats suggèrent une bonne reproductibilité du système de mesure.
+
+Cependant, une contribution estimée nulle ne permet pas d'affirmer que la variabilité réelle entre les techniciens est strictement inexistante.
+
+**Variabilité inter-lots**
+
+- La contribution de la variabilité inter-lots est de **99,14 \%**.
+- Le pourcentage de variation d'étude associé aux lots est de **99,57 \%**.
+
+La quasi-totalité de la variabilité observée provient des différences entre les lots. Le système de mesure permet donc de mettre en évidence les différences de concentration en antigène entre les lots étudiés.
+
+**Acceptabilité du système de mesure**
+
+- La contribution totale du Gage R\&R est de **0,86 \%**.
+- Le pourcentage de variation d'étude est de **9,27 \%**, inférieur au seuil de 10 \%.
+- Le pourcentage de tolérance est de **2,47 \%**, également inférieur au seuil de 10 \%.
+
+Selon les critères usuels d'acceptabilité du Gage R\&R, le système de mesure est considéré comme acceptable, aussi bien par rapport à la variabilité observée qu'à l'intervalle de spécification compris entre 95 et 105 \%.
+
+**Nombre de catégories distinctes (ndc)**
+
+- Le nombre de catégories distinctes est de **15**.
+- Cette valeur est supérieure au seuil recommandé de 5.
+
+Le système de mesure présente donc une bonne capacité de discrimination des différences entre les lots.
+
+\textcolor{red}{Les résultats du Gage R\&R indiquent que le système de mesure de la concentration en antigène est acceptable selon les critères usuels. Il présente une répétabilité satisfaisante, une bonne reproductibilité estimée et une bonne capacité de discrimination entre les lots. La variabilité observée provient principalement des différences entre les lots et non du système de mesure.}
 
 ### Interprétation et recommandations
+
+**Interprétation globale**
+
+Les différentes analyses statistiques réalisées permettent d'évaluer les performances du système de mesure de la concentration en antigène.
+
+Les principaux résultats sont les suivants :
+
+- Les statistiques descriptives montrent une faible dispersion des mesures pour un même lot et une variabilité plus importante entre les lots.
+- L'ANOVA met en évidence un effet hautement significatif du lot, tandis que l'effet du technicien et l'interaction lot $\times$ technicien ne sont pas significatifs.
+- Le test de Shapiro-Wilk ne remet pas en cause l'hypothèse de normalité des résidus.
+- Le Gage R\&R représente seulement **0,86 \%** de la variance totale.
+- Le pourcentage de variation d'étude est de **9,27 \%**, inférieur au seuil d'acceptabilité de 10 \%.
+- Le pourcentage de tolérance est de **2,47 \%**, indiquant une faible variabilité du système de mesure par rapport aux spécifications.
+- Le nombre de catégories distinctes est de **15**, traduisant une bonne capacité de discrimination entre les lots.
+
+L'ensemble de ces résultats indique que le système de mesure présente des performances satisfaisantes dans les conditions expérimentales étudiées.
+
+**Limites de l'étude**
+
+Malgré ces résultats favorables, certaines limites doivent être prises en considération :
+
+- Le nombre de lots étudiés est relativement faible.
+- Le nombre de répétitions est limité à deux par lot et par technicien.
+- Le pourcentage de variation d'étude reste proche du seuil d'acceptabilité de 10 \%.
+- La contribution estimée nulle de la reproductibilité ne garantit pas une absence totale de variabilité entre les techniciens.
+- L'étude Gage R\&R ne permet pas, à elle seule, de démontrer la justesse du système de mesure.
+
+**Recommandations**
+
+Afin de consolider les résultats obtenus et de garantir le maintien des performances du système de mesure, plusieurs recommandations peuvent être formulées :
+
+- Augmenter le nombre de lots étudiés, idéalement à dix lots représentatifs de la variabilité réelle de la production.
+- Augmenter le nombre de répétitions à trois par lot et par technicien.
+- Maintenir la standardisation du protocole analytique entre les techniciens.
+- Assurer un suivi régulier de l'étalonnage et de la maintenance des équipements.
+- Compléter l'étude par une évaluation de la justesse, de la linéarité et de la stabilité du système de mesure.
+- Renouveler périodiquement l'étude Gage R\&R, notamment après une modification du protocole, des équipements ou des conditions de mesure.
+
+**Conclusion de l'analyse A**
+
+\textcolor{red}{Le système de mesure de la concentration en antigène est considéré comme acceptable selon les critères usuels du Gage R\&R. Aucune action corrective immédiate concernant la répétabilité ou la reproductibilité n'est nécessaire au regard des résultats obtenus. Toutefois, une optimisation du plan expérimental et un suivi régulier des performances sont recommandés afin de renforcer la fiabilité des conclusions et de garantir la maîtrise du système de mesure dans le temps.}
 
 ## Analyse B – Teneur en adjuvant
 
