@@ -12,6 +12,7 @@ output:
     number_sections: true 
     fig_caption: true
     latex_engine: xelatex
+    keep_tex: true
 params: 
   afficher_code: false
 header-includes:
@@ -23,6 +24,8 @@ header-includes:
   - \titleformat{\section}{\Large\bfseries\color{bleufonce}}{\thesection}{1em}{}
   - \titleformat{\subsection}{\large\bfseries\color{bleuclair}}{\thesubsection}{1em}{}
   - \titleformat{\subsubsection}{\normalsize\bfseries\color{grisfonce}}{\thesubsubsection}{1em}{}
+  - \usepackage{float}
+  - \usepackage{placeins}
 ---    
 
 ```{r setup, include=FALSE}
@@ -321,7 +324,674 @@ Afin de consolider les résultats obtenus et de garantir le maintien des perform
 
 ## Analyse B – Teneur en adjuvant
 
+### Présentation des données
+
+```{r msa-b-preparation}
+data_B <- MSA_B %>%
+  mutate(
+    Technicien = factor(Technicien),
+    lots = factor(lots),
+    Runs = factor(Runs)
+  )
+
+kable(data_B, caption = "Données expérimentales de l'analyse B")
+```
+L'analyse B porte sur la mesure de la teneur en adjuvant.
+
+Le plan expérimental comprend :
+
+- **4 lots** ;
+- **3 techniciens** ;
+- **2 répétitions** par lot et par technicien ;
+- **24 mesures** au total.
+
+La méthode de mesure étant non destructive, un même échantillon peut être analysé plusieurs fois par différents techniciens.
+
+\textcolor{red}{Le plan expérimental permet de réaliser une étude Gage R\&R croisée afin d'évaluer la répétabilité et la reproductibilité du système de mesure.}
+
+### Statistiques descriptives
+
+```{r msa-b-statistiques}
+stat_B <- data_B %>%
+  group_by(Technicien) %>%
+  summarise(
+    Effectif = n(),
+    Moyenne = mean(Resultat),
+    Ecart_type = sd(Resultat),
+    Minimum = min(Resultat),
+    Maximum = max(Resultat)
+  )
+
+kable(stat_B, digits = 3,
+      caption = "Statistiques descriptives par technicien")
+```
+**Comparaison des moyennes entre les techniciens**
+
+- Clément présente une moyenne de **100,067 \%**.
+- Mathis présente une moyenne de **100,151 \%**.
+- Thomas présente une moyenne de **100,129 \%**.
+
+Les moyennes obtenues par les trois techniciens sont très proches de la valeur cible de 100 \%. Aucun décalage systématique important n'est apparent entre les techniciens.
+
+**Comparaison de la dispersion des résultats**
+
+- Clément présente l'écart-type le plus faible, avec une valeur de **0,462**.
+- Thomas présente une dispersion intermédiaire, avec un écart-type de **0,833**.
+- Mathis présente l'écart-type le plus élevé, avec une valeur de **1,473**.
+
+La dispersion des résultats obtenus par Mathis est environ trois fois supérieure à celle de Clément. Cette différence pourrait traduire une variabilité plus importante dans la réalisation des mesures. Toutefois, les écarts-types calculés regroupent plusieurs lots et ne permettent pas d'évaluer directement la répétabilité de chaque technicien.
+```{r msa-b-graphique, fig.cap="Distribution des résultats par lot et par technicien"}
+ggplot(data_B, aes(x = lots, y = Resultat,
+                   color = Technicien)) +
+  geom_point(size = 3) +
+  theme_bw() +
+  labs(
+    x = "Lots",
+    y = "Teneur en adjuvant (%)",
+    color = "Technicien"
+  ) +
+  theme(legend.position = "bottom")
+```
+**Analyse graphique des résultats**
+
+Le graphique met en évidence une dispersion des mesures au sein d'un même lot, notamment pour le lot T542R.
+
+Mathis présente des résultats particulièrement dispersés, avec une valeur maximale de 103,262 \% et une valeur minimale de 98,972 \%.
+
+Les différences entre les lots sont moins clairement identifiables en raison du chevauchement des résultats obtenus par les différents techniciens.
+
+**Respect des spécifications**
+
+Les valeurs mesurées sont comprises entre **98,826 \% et 103,262 \%**.
+
+L'ensemble des résultats respecte donc l'intervalle de spécification fixé entre 95 et 105 \%.
+
+\textcolor{red}{Les statistiques descriptives mettent en évidence des moyennes similaires entre les trois techniciens, mais des différences importantes de dispersion, notamment pour Mathis. Ces observations soulèvent des interrogations concernant la répétabilité et la capacité de discrimination du système de mesure. L'ANOVA et l'étude Gage R\&R permettront d'identifier les principales sources de variabilité et d'évaluer l'acceptabilité du système de mesure.}
+
+\FloatBarrier
+
+### Analyse de variance (ANOVA)
+
+Une analyse de variance à deux facteurs avec interaction est réalisée afin d'étudier l'influence du lot, du technicien et de leur interaction sur la teneur en adjuvant.
+
+```{r msa-b-anova}
+anova_B <- aov(Resultat ~ lots * Technicien,
+               data = data_B)
+
+summary(anova_B)
+```
+**Influence du lot**
+
+- La valeur de F est de **1,382**.
+- La p-value est de **0,296**, donc supérieure à 0,05.
+- L'effet du lot n'est **pas significatif**.
+
+Aucune différence statistiquement significative n'est mise en évidence entre les différents lots. La variabilité entre les lots semble insuffisante par rapport à la variabilité résiduelle pour permettre de distinguer clairement leurs teneurs en adjuvant.
+
+**Influence du technicien**
+
+- La valeur de F est de **0,014**.
+- La p-value est de **0,986**, donc supérieure à 0,05.
+- L'effet du technicien n'est **pas significatif**.
+
+Aucune différence statistiquement significative n'est mise en évidence entre les moyennes obtenues par Clément, Mathis et Thomas. Ce résultat est cohérent avec les statistiques descriptives, qui montrent des moyennes très proches entre les trois techniciens.
+
+Cependant, l'absence d'effet significatif du technicien ne garantit pas une bonne répétabilité des mesures.
+
+**Interaction entre le lot et le technicien**
+
+- La valeur de F est de **0,699**.
+- La p-value est de **0,656**, donc supérieure à 0,05.
+- L'interaction lot $\times$ technicien n'est **pas significative**.
+
+Aucune influence significative de l'interaction entre le lot et le technicien n'est mise en évidence. Il n'existe donc pas de preuve statistique que les différences entre les techniciens dépendent du lot analysé.
+
+\textcolor{red}{Les résultats de l'ANOVA ne mettent en évidence aucun effet statistiquement significatif du lot, du technicien ou de leur interaction. Toutefois, la variabilité résiduelle importante pourrait masquer les différences réelles entre les lots. Ces résultats soulèvent des interrogations concernant la répétabilité et la capacité de discrimination du système de mesure. L'étude Gage R\&R permettra de confirmer ou non ces observations, sous réserve de la vérification des hypothèses de l'ANOVA.}
+
+### Vérification des hypothèses
+
+**Normalité des résidus**
+
+```{r msa-b-normalite}
+shapiro_B <- shapiro.test(residuals(anova_B))
+
+tableau_shapiro_B <- data.frame(
+  Test = "Shapiro-Wilk",
+  W = shapiro_B$statistic,
+  "p-value" = shapiro_B$p.value,
+  check.names = FALSE
+)
+
+kable(tableau_shapiro_B,
+      digits = 4,
+      caption = "Test de normalité des résidus",
+      row.names = FALSE)
+```
+**Interprétation du test de Shapiro-Wilk**
+
+- La statistique W est de **0,9379**.
+- La p-value est de **0,1462**, donc supérieure à 0,05.
+- L'hypothèse de normalité des résidus n'est pas rejetée.
+```{r msa-b-qqplot}
+qqnorm(residuals(anova_B),
+       main = "QQ-plot des résidus",
+       xlab = "Quantiles théoriques",
+       ylab = "Quantiles observés")
+
+qqline(residuals(anova_B), col = "red")
+```
+
+\begin{center}
+\textit{QQ-plot des résidus de l'analyse B}
+\end{center}
+
+**Interprétation du QQ-plot**
+
+La majorité des points est relativement bien alignée sur la droite théorique. Cependant, des écarts sont observés aux deux extrémités du graphique, indiquant la présence de résidus extrêmes.
+
+Ces écarts peuvent traduire une dispersion plus importante de certaines mesures.
+
+\textcolor{red}{Le test de Shapiro-Wilk et l'analyse graphique ne mettent pas en évidence de violation majeure de l'hypothèse de normalité des résidus. Toutefois, la présence de valeurs extrêmes et le faible effectif nécessitent une interprétation prudente des résultats.}
+
+**Homoscédasticité**
+
+```{r msa-b-homoscedasticite, fig.cap="Résidus en fonction des valeurs ajustées"}
+plot(fitted(anova_B), residuals(anova_B),
+     xlab = "Valeurs ajustées",
+     ylab = "Résidus",
+     main = "Résidus en fonction des valeurs ajustées")
+
+abline(h = 0, col = "red", lty = 2)
+```
+
+```{r msa-b-bartlett}
+bartlett_B <- bartlett.test(
+  Resultat ~ interaction(lots, Technicien),
+  data = data_B
+)
+
+tableau_bartlett_B <- data.frame(
+  Test = "Bartlett",
+  Statistique = bartlett_B$statistic,
+  "p-value" = bartlett_B$p.value,
+  check.names = FALSE
+)
+
+kable(tableau_bartlett_B,
+      digits = 4,
+      caption = "Test d'homogénéité des variances",
+      row.names = FALSE)
+```
+**Interprétation du graphique des résidus**
+
+- Les résidus sont globalement répartis autour de zéro.
+- Aucune tendance croissante ou décroissante nette n'est observée.
+- La dispersion des résidus n'est cependant pas parfaitement homogène.
+- Deux résidus extrêmes, proches de -2 et +2, sont observés pour des valeurs ajustées proches de 101,3 \%.
+
+La présence de ces résidus extrêmes suggère une variabilité plus importante pour certaines combinaisons lot-technicien.
+
+\textcolor{red}{L'analyse graphique soulève un doute concernant l'homogénéité des variances. Un test statistique complémentaire, tel que le test de Bartlett, permettra d'approfondir la vérification de cette hypothèse.}
+### Gage R&R
+
+L'étude Gage R\&R permet de quantifier la variabilité du système de mesure de la teneur en adjuvant en distinguant la répétabilité, la reproductibilité et la variabilité inter-lots.
+
+```{r msa-b-gage, fig.width=12, fig.height=8, out.width="100%"}
+ss.rr(
+  var = Resultat,
+  part = lots,
+  appr = Technicien,
+  data = data_B,
+  tolerance = 10
+)
+```
+**Choix du modèle statistique**
+
+- La p-value de l'interaction lot $\times$ technicien est de **0,656**, donc supérieure à 0,05.
+- L'interaction n'est pas statistiquement significative.
+- Le modèle réduit, sans interaction, est donc retenu par la méthode utilisée.
+
+**Répétabilité**
+
+- La contribution de la répétabilité à la variance totale est de **91,81 \%**.
+- L'écart-type associé à la répétabilité est de **0,9762**.
+- Le pourcentage de variation d'étude est de **95,82 \%**.
+
+La répétabilité constitue la principale source de variabilité du système de mesure. Les mesures réalisées par un même technicien sur un même échantillon présentent une dispersion importante.
+
+La méthode présente donc une répétabilité insuffisante.
+
+**Reproductibilité**
+
+- La contribution estimée de la reproductibilité est de **0,00 \%**.
+- La p-value associée à l'effet du technicien dans le modèle réduit est de **0,984**, donc supérieure à 0,05.
+
+Aucune variabilité significative liée aux différences moyennes entre les techniciens n'est mise en évidence.
+
+Cependant, cette contribution estimée nulle ne garantit pas une bonne reproductibilité réelle. La forte variabilité résiduelle pourrait masquer certaines différences entre les techniciens.
+
+**Variabilité inter-lots**
+
+- La contribution de la variabilité inter-lots est de **8,19 \%**.
+- Le pourcentage de variation d'étude associé aux lots est de **28,63 \%**.
+
+La variabilité inter-lots est faible par rapport à celle du système de mesure. Les erreurs de mesure rendent difficile la distinction des différences réelles de teneur en adjuvant entre les lots.
+
+**Acceptabilité du système de mesure**
+
+- La contribution totale du Gage R\&R est de **91,81 \%**.
+- Le pourcentage de variation d'étude est de **95,82 \%**, largement supérieur au seuil de 30 \%.
+- Le pourcentage de tolérance est de **58,57 \%**, également supérieur au seuil de 30 \%.
+
+Selon les critères usuels d'acceptabilité du Gage R\&R, le système de mesure est considéré comme non acceptable.
+
+La variabilité du système de mesure représente une proportion importante de l'intervalle de spécification compris entre 95 et 105 \%.
+
+**Nombre de catégories distinctes (ndc)**
+
+- Le nombre de catégories distinctes est de **1**.
+- Cette valeur est inférieure au seuil recommandé de 5.
+
+Le système de mesure ne possède pas une capacité de discrimination suffisante pour distinguer les différents niveaux de teneur en adjuvant des lots étudiés.
+
+\textcolor{red}{Les résultats du Gage R\&R montrent que le système de mesure de la teneur en adjuvant n'est pas acceptable. La variabilité provient principalement d'un défaut de répétabilité. Le système de mesure ne permet pas de distinguer efficacement les différences entre les lots. Des actions correctives sont donc nécessaires avant de pouvoir considérer la méthode comme suffisamment fiable.}
+
+### Interprétation et recommandations
+
+**Interprétation globale**
+
+Les différentes analyses statistiques réalisées mettent en évidence des performances insuffisantes du système de mesure de la teneur en adjuvant.
+
+Les principaux résultats sont les suivants :
+
+- Les statistiques descriptives montrent des moyennes proches entre les techniciens, mais des différences importantes de dispersion.
+- L'ANOVA ne met en évidence aucun effet significatif du lot, du technicien ou de leur interaction.
+- Le test de Shapiro-Wilk ne remet pas en cause la normalité des résidus, malgré la présence de résidus extrêmes.
+- L'analyse graphique des résidus soulève un doute concernant l'homogénéité des variances.
+- Le Gage R\&R représente **91,81 \%** de la variance totale.
+- Le pourcentage de variation d'étude atteint **95,82 \%**.
+- Le pourcentage de tolérance atteint **58,57 \%**.
+- Le nombre de catégories distinctes est limité à **1**.
+
+La principale source de variabilité identifiée est la répétabilité du système de mesure. Cette variabilité importante limite la capacité de discrimination entre les lots.
+
+**Limites de l'étude**
+
+- Le nombre de lots étudiés est limité à quatre.
+- Seulement deux répétitions sont réalisées par lot et par technicien.
+- La présence de résidus extrêmes peut influencer les résultats statistiques.
+- L'homogénéité des variances reste à confirmer.
+- La forte variabilité résiduelle pourrait masquer certains effets liés aux techniciens ou aux lots.
+
+**Recommandations**
+
+Afin d'améliorer les performances du système de mesure, plusieurs actions sont recommandées :
+
+- Identifier les causes de la mauvaise répétabilité à l'aide d'un diagramme d'Ishikawa (méthode des 5M).
+- Vérifier l'étalonnage, la maintenance et les performances des équipements analytiques.
+- Vérifier l'homogénéité et la stabilité des échantillons.
+- Standardiser davantage le protocole de mesure et les conditions expérimentales.
+- Examiner les pratiques de mesure des techniciens, notamment celles de Mathis, sans attribuer directement la responsabilité de la variabilité à un opérateur.
+- Vérifier les conditions environnementales susceptibles d'influencer les résultats.
+- Augmenter le nombre de lots et de répétitions lors de la prochaine étude.
+- Réaliser une nouvelle étude Gage R\&R après la mise en place des actions correctives.
+
+**Conclusion de l'analyse B**
+
+\textcolor{red}{Le système de mesure de la teneur en adjuvant est considéré comme non acceptable selon les critères usuels du Gage R\&R. Malgré des moyennes similaires entre les techniciens et des résultats compris dans les limites de spécification, la répétabilité est insuffisante et la capacité de discrimination entre les lots est très faible. Des actions correctives doivent être mises en place, suivies d'une nouvelle étude MSA afin de vérifier l'amélioration des performances du système de mesure.}
+
 ## Analyse C – Activité immunologique
+
+### Présentation des données
+
+```{r msa-c-preparation}
+data_C <- MSA_C %>%
+  mutate(
+    Technicien = factor(Technicien),
+    lots = factor(lots),
+    Runs = factor(Runs)
+  )
+
+kable(data_C, caption = "Données expérimentales de l'analyse C")
+```
+
+L'analyse C porte sur la mesure de l'activité immunologique.
+
+Le plan expérimental comprend :
+
+- **4 lots** ;
+- **3 techniciens** ;
+- **2 répétitions** par lot et par technicien ;
+- **24 mesures** au total (4 $\times$ 3 $\times$ 2).
+
+La méthode de mesure étant non destructive, un même échantillon peut être analysé plusieurs fois par différents techniciens.
+
+Le plan expérimental est croisé et équilibré, sous réserve que les mêmes échantillons soient utilisés par chaque technicien.
+
+\textcolor{red}{Ce plan expérimental permet d'évaluer la répétabilité, la reproductibilité, la variabilité inter-lots ainsi que l'interaction entre le lot et le technicien à l'aide d'une étude Gage R\&R croisée.}
+
+### Statistiques descriptives
+
+```{r msa-c-statistiques}
+stat_C <- data_C %>%
+  group_by(Technicien) %>%
+  summarise(
+    Effectif = n(),
+    Moyenne = mean(Resultat),
+    Ecart_type = sd(Resultat),
+    Minimum = min(Resultat),
+    Maximum = max(Resultat)
+  )
+
+kable(stat_C, digits = 3,
+      caption = "Statistiques descriptives par technicien")
+```
+**Comparaison des moyennes entre les techniciens**
+
+- Aaron présente une moyenne de **100,216 \%**.
+- Léon présente une moyenne de **100,806 \%**.
+- Pierre présente une moyenne de **98,847 \%**.
+
+Aaron présente la moyenne la plus proche de la valeur cible de 100 \%. Léon obtient des résultats globalement plus élevés, tandis que Pierre obtient des résultats plus faibles.
+
+L'écart entre les moyennes de Léon et de Pierre est de 1,959 point de pourcentage. Cette différence pourrait traduire un effet du technicien sur les résultats de mesure.
+
+**Comparaison de la dispersion des résultats**
+
+- Léon présente l'écart-type le plus faible, avec une valeur de **1,048**.
+- Aaron présente une dispersion intermédiaire, avec un écart-type de **1,892**.
+- Pierre présente l'écart-type le plus élevé, avec une valeur de **2,069**.
+
+La dispersion des résultats obtenus par Pierre est près de deux fois supérieure à celle de Léon.
+
+Cependant, ces écarts-types prennent également en compte la variabilité entre les lots. Ils ne permettent donc pas de conclure directement sur la répétabilité des techniciens.
+
+```{r msa-c-graphique, fig.cap="Distribution des résultats par lot et par technicien"}
+ggplot(data_C, aes(x = lots, y = Resultat,
+                   color = Technicien)) +
+  geom_point(size = 3) +
+  theme_bw() +
+  labs(
+    x = "Lots",
+    y = "Activité immunologique (%)",
+    color = "Technicien"
+  ) +
+  theme(legend.position = "bottom")
+```
+**Analyse graphique des résultats**
+
+Le graphique met en évidence des différences de résultats entre les techniciens pour un même lot.
+
+Léon obtient généralement des valeurs plus élevées que Pierre. Toutefois, cette tendance n'est pas systématique pour l'ensemble des lots.
+
+Des différences de comportement entre les techniciens selon le lot analysé sont également observées. Cela pourrait suggérer la présence d'une interaction entre le lot et le technicien.
+
+La dispersion des mesures répétées pour une même combinaison lot-technicien semble relativement faible sur le graphique.
+
+**Respect des spécifications**
+
+Les valeurs mesurées sont comprises entre **95,641 \% et 102,375 \%**.
+
+L'ensemble des résultats respecte donc l'intervalle de spécification fixé entre 95 et 105 \%. Toutefois, la valeur minimale obtenue par Pierre est relativement proche de la limite inférieure de spécification.
+
+\textcolor{red}{Les statistiques descriptives mettent en évidence des différences de moyennes et de dispersion entre les techniciens. Ces observations soulèvent principalement des interrogations concernant la reproductibilité du système de mesure ainsi que l'existence d'une éventuelle interaction entre le lot et le technicien. L'ANOVA et l'étude Gage R\&R permettront de confirmer ou non ces hypothèses et d'évaluer l'acceptabilité du système de mesure.}
+
+\FloatBarrier
+
+### Analyse de variance (ANOVA)
+
+Une analyse de variance à deux facteurs avec interaction est réalisée afin d'étudier l'influence du lot, du technicien et de leur interaction sur l'activité immunologique.
+
+```{r msa-c-anova}
+anova_C <- aov(Resultat ~ lots * Technicien,
+               data = data_C)
+
+summary(anova_C)
+```
+**Influence du lot**
+
+- La valeur de F est de **59,56**.
+- La p-value est de **$1,77 \times 10^{-7}$**, donc largement inférieure à 0,05.
+- L'effet du lot est donc **hautement significatif**.
+
+Cela signifie que les résultats varient significativement d'un lot à l'autre. Le lot exerce donc une influence importante sur les valeurs mesurées de l'activité immunologique.
+
+**Influence du technicien**
+
+- La valeur de F est de **32,59**.
+- La p-value est de **$1,41 \times 10^{-5}$**, donc largement inférieure à 0,05.
+- L'effet du technicien est donc **hautement significatif**.
+
+Les résultats mettent en évidence des différences significatives entre les mesures réalisées par les techniciens. Cette observation est cohérente avec les statistiques descriptives, qui montrent notamment des différences de moyennes entre Léon et Pierre.
+
+Ces résultats suggèrent un défaut de reproductibilité du système de mesure. Toutefois, la présence d'une interaction significative nécessite de nuancer l'interprétation de cet effet.
+
+**Interaction entre le lot et le technicien**
+
+- La valeur de F est de **10,40**.
+- La p-value est de **0,000366**, donc largement inférieure à 0,05.
+- L'interaction lot $\times$ technicien est donc **hautement significative**.
+
+Cela signifie que l'influence du technicien sur les résultats dépend du lot analysé. Les différences entre les techniciens ne sont donc pas constantes pour l'ensemble des lots.
+
+Cette interaction pourrait notamment être liée à des différences de manipulation, de préparation des échantillons ou d'application du protocole analytique. Ces causes restent toutefois à vérifier.
+
+La présence d'une interaction significative justifie de conserver le modèle complet avec interaction pour l'étude Gage R\&R.
+
+\textcolor{red}{Les résultats de l'ANOVA mettent en évidence une influence significative du lot, du technicien et de leur interaction. Ces observations suggèrent un défaut de reproductibilité du système de mesure de l'activité immunologique. L'étude Gage R\&R permettra de quantifier les différentes sources de variabilité et de déterminer si le système de mesure est acceptable, sous réserve de la vérification des hypothèses de l'ANOVA.}
+
+### Vérification des hypothèses
+
+**Normalité des résidus**
+
+```{r msa-c-normalite}
+shapiro_C <- shapiro.test(residuals(anova_C))
+
+tableau_shapiro_C <- data.frame(
+  Test = "Shapiro-Wilk",
+  W = shapiro_C$statistic,
+  "p-value" = shapiro_C$p.value,
+  check.names = FALSE
+)
+
+kable(tableau_shapiro_C,
+      digits = 4,
+      caption = "Test de normalité des résidus",
+      row.names = FALSE)
+```
+**Interprétation du test de Shapiro-Wilk**
+
+- La statistique W est de **0,9813**.
+- La p-value est de **0,9191**, donc largement supérieure à 0,05.
+- L'hypothèse de normalité des résidus n'est **pas rejetée**.
+```{r msa-c-qqplot}
+qqnorm(residuals(anova_C),
+       main = "QQ-plot des résidus",
+       xlab = "Quantiles théoriques",
+       ylab = "Quantiles observés")
+
+qqline(residuals(anova_C), col = "red")
+```
+**Interprétation du QQ-plot**
+
+Les points sont globalement bien alignés sur la droite théorique. Quelques légers écarts sont observés, mais aucune déviation majeure ni valeur particulièrement atypique n'est mise en évidence.
+
+L'analyse graphique est donc cohérente avec les résultats du test de Shapiro-Wilk.
+
+\textcolor{red}{Le test de Shapiro-Wilk et le QQ-plot ne mettent pas en évidence de violation de l'hypothèse de normalité des résidus. Cette condition d'application de l'ANOVA est donc considérée comme satisfaisante dans les conditions de l'étude.}
+
+\begin{center}
+\textit{QQ-plot des résidus de l'analyse C}
+\end{center}
+
+**Homoscédasticité**
+
+```{r msa-c-homoscedasticite}
+plot(fitted(anova_C), residuals(anova_C),
+     xlab = "Valeurs ajustées",
+     ylab = "Résidus",
+     main = "Résidus en fonction des valeurs ajustées")
+
+abline(h = 0, col = "red", lty = 2)
+```
+**Interprétation du graphique des résidus**
+
+- Les résidus sont globalement répartis autour de zéro.
+- Les résidus sont compris approximativement entre -0,7 et +0,7.
+- Aucune tendance croissante ou décroissante nette n'est observée.
+- Aucune forme d'entonnoir clairement identifiable n'est mise en évidence.
+- Quelques différences de dispersion sont observées selon les valeurs ajustées.
+
+La répartition des résidus ne met pas en évidence de structure particulière. Cependant, la dispersion semble légèrement plus importante pour certaines valeurs ajustées, notamment autour de 100 \%.
+
+\textcolor{red}{L'analyse graphique ne met pas en évidence de violation majeure de l'hypothèse d'homoscédasticité. Toutefois, le faible nombre de répétitions limite la capacité à détecter une éventuelle hétérogénéité des variances. Le test de Bartlett permettra de compléter cette analyse.}
+
+\begin{center}
+\textit{Résidus en fonction des valeurs ajustées}
+\end{center}
+
+```{r msa-c-bartlett}
+bartlett_C <- bartlett.test(
+  Resultat ~ interaction(lots, Technicien),
+  data = data_C
+)
+tableau_bartlett_C <- data.frame(
+  Test = "Bartlett",
+  Statistique = bartlett_C$statistic,
+  "p-value" = bartlett_C$p.value,
+  check.names = FALSE
+)
+
+kable(tableau_bartlett_C,
+      digits = 4,
+      caption = "Test d'homogénéité des variances",
+      row.names = FALSE)
+```
+
+\FloatBarrier
+
+### Gage R&R
+
+L'étude Gage R\&R permet de quantifier la variabilité du système de mesure de l'activité immunologique en distinguant la répétabilité, la reproductibilité et la variabilité inter-lots.
+
+```{r msa-c-gage, fig.width=12, fig.height=8, out.width="100%"}
+ss.rr(
+  var = Resultat,
+  part = lots,
+  appr = Technicien,
+  data = data_C,
+  tolerance = 10
+)
+```
+**Choix du modèle statistique**
+
+- La p-value de l'interaction lot $\times$ technicien est de **0,000366**, donc inférieure à 0,05.
+- L'interaction est hautement significative.
+- Le modèle complet avec interaction est donc conservé.
+
+**Répétabilité**
+
+- La contribution de la répétabilité à la variance totale est de **6,00 \%**.
+- L'écart-type associé à la répétabilité est de **0,4978**.
+- Le pourcentage de variation d'étude est de **24,49 \%**.
+- Le pourcentage de tolérance est de **29,87 \%**.
+
+La répétabilité constitue une source secondaire de variabilité par rapport à la reproductibilité.
+
+Cependant, les pourcentages de variation d'étude et de tolérance restent compris entre 10 et 30 \%. La répétabilité est donc acceptable uniquement sous certaines conditions et pourrait être améliorée.
+
+**Reproductibilité**
+
+- La contribution de la reproductibilité à la variance totale est de **44,85 \%**.
+- La contribution liée au technicien est de **16,64 \%**.
+- La contribution liée à l'interaction lot $\times$ technicien est de **28,21 \%**.
+- Le pourcentage de variation d'étude est de **66,97 \%**.
+- Le pourcentage de tolérance est de **81,65 \%**.
+
+La reproductibilité constitue la principale source de variabilité du système de mesure.
+
+L'interaction entre le lot et le technicien représente la composante la plus importante de cette reproductibilité. Cela indique que les différences entre les techniciens dépendent du lot analysé.
+
+La reproductibilité du système de mesure est donc insuffisante.
+
+**Variabilité inter-lots**
+
+- La contribution de la variabilité inter-lots est de **49,15 \%**.
+- Le pourcentage de variation d'étude associé aux lots est de **70,11 \%**.
+
+Les différences entre les lots représentent près de la moitié de la variance totale. Cependant, la variabilité du système de mesure reste légèrement supérieure à la variabilité inter-lots, ce qui limite la capacité à distinguer efficacement les lots.
+
+**Acceptabilité du système de mesure**
+
+- La contribution totale du Gage R\&R est de **50,85 \%**.
+- Le pourcentage de variation d'étude est de **71,31 \%**, largement supérieur au seuil de 30 \%.
+- Le pourcentage de tolérance est de **86,95 \%**, également supérieur au seuil de 30 \%.
+
+La variation du système de mesure représente une proportion très importante de l'intervalle de spécification compris entre 95 et 105 \%.
+
+Selon les critères usuels du Gage R\&R, le système de mesure est considéré comme non acceptable.
+
+**Nombre de catégories distinctes (ndc)**
+
+- Le nombre de catégories distinctes est de **1**.
+- Cette valeur est inférieure au seuil recommandé de 5.
+
+Le système de mesure ne présente donc pas une capacité de discrimination suffisante pour distinguer les différents niveaux d'activité immunologique des lots étudiés.
+
+\textcolor{red}{Les résultats du Gage R\&R montrent que le système de mesure de l'activité immunologique n'est pas acceptable. La principale source de variabilité provient de la reproductibilité, notamment de l'interaction entre le lot et le technicien. Des actions correctives sont nécessaires afin d'améliorer l'harmonisation des pratiques analytiques et la capacité de discrimination du système de mesure.}
+
+\FloatBarrier
+
+### Interprétation et recommandations
+
+**Interprétation globale**
+
+Les différentes analyses statistiques réalisées mettent en évidence des performances insuffisantes du système de mesure de l'activité immunologique.
+
+Les principaux résultats sont les suivants :
+
+- Les statistiques descriptives montrent des différences de moyennes et de dispersion entre les techniciens.
+- L'ANOVA à effets fixes met en évidence une influence significative du lot, du technicien et de leur interaction.
+- Le test de Shapiro-Wilk ne remet pas en cause la normalité des résidus.
+- L'analyse graphique ne met pas en évidence de violation majeure de l'hypothèse d'homoscédasticité.
+- Le Gage R\&R représente **50,85 \%** de la variance totale.
+- La reproductibilité représente **44,85 \%** de la variance totale.
+- L'interaction lot $\times$ technicien représente **28,21 \%** de la variance totale.
+- Le pourcentage de variation d'étude atteint **71,31 \%**.
+- Le pourcentage de tolérance atteint **86,95 \%**.
+- Le nombre de catégories distinctes est limité à **1**.
+
+La principale source de variabilité du système de mesure est donc liée à la reproductibilité, et plus particulièrement à l'interaction entre le lot et le technicien.
+
+**Limites de l'étude**
+
+Malgré les différences mises en évidence, certaines limites doivent être prises en considération :
+
+- Le nombre de lots étudiés est limité à quatre.
+- Seulement deux répétitions sont réalisées par lot et par technicien.
+- Le nombre de techniciens est limité à trois.
+- L'homogénéité des variances reste à confirmer.
+- Les causes exactes de l'interaction entre le lot et le technicien ne sont pas identifiées.
+- L'étude ne permet pas de déterminer quel technicien obtient les résultats les plus proches des valeurs vraies.
+
+**Recommandations**
+
+Afin d'améliorer les performances du système de mesure, plusieurs actions sont recommandées :
+
+- Identifier les causes de la mauvaise reproductibilité à l'aide d'un diagramme d'Ishikawa.
+- Comparer les pratiques analytiques des trois techniciens.
+- Renforcer la standardisation du protocole de mesure.
+- Vérifier les étapes de préparation et de manipulation des échantillons.
+- Identifier les caractéristiques des lots susceptibles d'influencer différemment les mesures selon le technicien.
+- Organiser une formation commune des techniciens afin d'harmoniser les pratiques.
+- Vérifier l'étalonnage et les performances des équipements analytiques.
+- Utiliser des échantillons de référence afin d'évaluer la justesse des mesures.
+- Augmenter le nombre de lots, idéalement à dix, et le nombre de répétitions à trois lors d'une étude complémentaire.
+- Réaliser une nouvelle étude Gage R\&R après la mise en place des actions correctives.
+
+**Conclusion de l'analyse C**
+
+\textcolor{red}{Le système de mesure de l'activité immunologique est considéré comme non acceptable selon les critères usuels du Gage R\&R. Bien que l'ensemble des résultats mesurés respecte les spécifications, la reproductibilité est insuffisante et la capacité de discrimination entre les lots est très faible. L'amélioration de la reproductibilité, notamment par la réduction de l'interaction entre le lot et le technicien, constitue la priorité. Une nouvelle étude MSA devra être réalisée après la mise en place des actions correctives.}
 
 ## Analyse D – Protéines totales
 
