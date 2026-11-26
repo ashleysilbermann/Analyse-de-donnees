@@ -34,6 +34,7 @@ library(dplyr)
 library(ggplot2)
 library(knitr)
 library(SixSigma)
+library(lme4)
 
 knitr::opts_chunk$set(
   echo = params$afficher_code,
@@ -993,6 +994,1256 @@ Afin d'améliorer les performances du système de mesure, plusieurs actions sont
 
 \textcolor{red}{Le système de mesure de l'activité immunologique est considéré comme non acceptable selon les critères usuels du Gage R\&R. Bien que l'ensemble des résultats mesurés respecte les spécifications, la reproductibilité est insuffisante et la capacité de discrimination entre les lots est très faible. L'amélioration de la reproductibilité, notamment par la réduction de l'interaction entre le lot et le technicien, constitue la priorité. Une nouvelle étude MSA devra être réalisée après la mise en place des actions correctives.}
 
-## Analyse D – Protéines totales
+## Analyse D – Dosage des protéines totales
 
-## Analyse E – Conservateur par HPLC-UV
+### Présentation des données
+
+```{r msa-d-preparation}
+data_D <- MSA_D %>%
+  mutate(
+    Technicien = factor(Technicien),
+    lots = factor(lots),
+    Runs = factor(Runs),
+    Lot_imbrique = interaction(Technicien, lots)
+  )
+
+kable(data_D[, c("Technicien", "lots", "Runs", "Resultat")],
+      caption = "Données expérimentales de l'analyse D")
+```
+
+L'analyse D porte sur le dosage des protéines totales (antigène et protéines associées) par une méthode colorimétrique.
+
+Le plan expérimental comprend :
+
+- **3 techniciens** : Mia, Milan et Rose ;
+- **4 lots** : B521V, D417X, S573M et U266Z ;
+- **2 répétitions** par lot et par technicien ;
+- **24 mesures** au total.
+
+Les limites de spécification sont fixées entre 95 et 105 \%, soit une tolérance de 10 points de pourcentage.
+
+La méthode analytique étant destructive, chaque mesure est réalisée sur un prélèvement distinct.
+
+**Vérification du plan expérimental**
+
+```{r msa-d-plan}
+plan_D <- with(data_D, table(lots, Technicien))
+
+kable(plan_D,
+      caption = "Répartition des mesures par lot et par technicien")
+```
+
+Une approche imbriquée est étudiée en considérant les groupes de prélèvements propres à chaque technicien.
+
+Cette approche constitue une alternative au modèle croisé, puisque les lots physiques sont communs aux trois techniciens.
+
+Elle ne permet pas de distinguer la variabilité inter-lots de l'interaction entre le lot et le technicien.
+
+\textcolor{red}{Le caractère destructif de la méthode ne permet pas de dissocier complètement la variabilité liée à la répétabilité du système de mesure de celle liée à l'hétérogénéité des prélèvements.}
+
+### Statistiques descriptives
+
+```{r msa-d-statistiques}
+stat_D <- data_D %>%
+  group_by(Technicien) %>%
+  summarise(
+    Effectif = n(),
+    Moyenne = mean(Resultat),
+    Ecart_type = sd(Resultat),
+    Minimum = min(Resultat),
+    Maximum = max(Resultat),
+    .groups = "drop"
+  )
+
+kable(stat_D,
+      digits = 3,
+      caption = "Statistiques descriptives par technicien")
+```
+
+```{r msa-d-graphique, fig.width=7, fig.height=4.5, out.width="100%"}
+ggplot(data_D, aes(x = lots,
+                   y = Resultat,
+                   color = Technicien)) +
+  geom_point(size = 3) +
+  theme_bw() +
+  labs(
+    x = "Lots",
+    y = "Teneur en protéines totales (%)",
+    color = "Technicien"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+\begin{center}
+\textit{Distribution des résultats par lot et par technicien}
+\end{center}
+
+\FloatBarrier
+
+**Comparaison des moyennes entre les techniciens**
+
+**Comparaison de la dispersion des résultats**
+
+**Analyse graphique des résultats**
+
+**Respect des spécifications**
+
+### Analyse de variance imbriquée
+
+Une analyse de variance imbriquée est réalisée afin d'étudier l'influence du technicien et des groupes de prélèvements imbriqués dans les techniciens.
+
+Le modèle statistique étudié est le suivant :
+
+$$
+Y_{ijk} = \mu + T_i + L_{j(i)} + \varepsilon_{ijk}
+$$
+
+Avec :
+
+- $\mu$ : moyenne générale ;
+- $T_i$ : effet du technicien ;
+- $L_{j(i)}$ : effet du groupe imbriqué dans le technicien ;
+- $\varepsilon_{ijk}$ : erreur résiduelle.
+
+Le seuil de significativité est fixé à 5 \%.
+
+```{r msa-d-anova}
+anova_D <- aov(
+  Resultat ~ Technicien / lots,
+  data = data_D
+)
+
+tab_D <- summary(anova_D)[[1]]
+
+F_technicien_D <- tab_D[1, "Mean Sq"] /
+                  tab_D[2, "Mean Sq"]
+
+F_lot_D <- tab_D[2, "Mean Sq"] /
+           tab_D[3, "Mean Sq"]
+
+resultats_anova_D <- data.frame(
+  Facteur = c(
+    "Technicien",
+    "Lot imbriqué",
+    "Résidus"
+  ),
+  Df = tab_D[, "Df"],
+  Sum_Sq = tab_D[, "Sum Sq"],
+  Mean_Sq = tab_D[, "Mean Sq"],
+  F = c(
+    F_technicien_D,
+    F_lot_D,
+    NA
+  ),
+  p_value = c(
+    pf(F_technicien_D,
+       tab_D[1, "Df"],
+       tab_D[2, "Df"],
+       lower.tail = FALSE),
+    pf(F_lot_D,
+       tab_D[2, "Df"],
+       tab_D[3, "Df"],
+       lower.tail = FALSE),
+    NA
+  )
+)
+
+kable(resultats_anova_D,
+      digits = 5,
+      caption = "ANOVA du modèle imbriqué",
+      row.names = FALSE)
+```
+
+**Influence du technicien**
+
+**Influence du lot imbriqué dans le technicien**
+
+**Conclusion de l'ANOVA**
+
+### Vérification des hypothèses
+
+**Normalité des résidus**
+
+Le test de Shapiro-Wilk permet d'évaluer la compatibilité de la distribution des résidus avec une distribution normale.
+
+Les hypothèses du test sont les suivantes :
+
+- $H_0$ : les résidus suivent une distribution normale.
+- $H_1$ : les résidus ne suivent pas une distribution normale.
+
+```{r msa-d-normalite}
+shapiro_D <- shapiro.test(residuals(anova_D))
+
+tableau_shapiro_D <- data.frame(
+  Test = "Shapiro-Wilk",
+  W = shapiro_D$statistic,
+  "p-value" = shapiro_D$p.value,
+  check.names = FALSE
+)
+
+kable(tableau_shapiro_D,
+      digits = 4,
+      caption = "Test de normalité des résidus",
+      row.names = FALSE)
+```
+
+```{r msa-d-qqplot}
+qqnorm(
+  residuals(anova_D),
+  main = "QQ-plot des résidus",
+  xlab = "Quantiles théoriques",
+  ylab = "Quantiles observés"
+)
+
+qqline(residuals(anova_D),
+       col = "red")
+```
+
+\begin{center}
+\textit{QQ-plot des résidus de l'analyse D}
+\end{center}
+
+\FloatBarrier
+
+**Interprétation du test de Shapiro-Wilk**
+
+**Interprétation du QQ-plot**
+
+**Homoscédasticité**
+
+L'homoscédasticité correspond à l'hypothèse selon laquelle la variance des erreurs est constante.
+
+```{r msa-d-homoscedasticite}
+plot(
+  fitted(anova_D),
+  residuals(anova_D),
+  xlab = "Valeurs ajustées",
+  ylab = "Résidus",
+  main = "Résidus en fonction des valeurs ajustées"
+)
+
+abline(h = 0,
+       col = "red",
+       lty = 2)
+```
+
+\begin{center}
+\textit{Résidus en fonction des valeurs ajustées}
+\end{center}
+
+\FloatBarrier
+
+**Interprétation du graphique des résidus**
+
+**Test de Bartlett**
+
+Les hypothèses du test sont les suivantes :
+
+- $H_0$ : les variances sont homogènes.
+- $H_1$ : au moins une variance est différente.
+
+```{r msa-d-bartlett}
+bartlett_D <- bartlett.test(
+  Resultat ~ Lot_imbrique,
+  data = data_D
+)
+
+tableau_bartlett_D <- data.frame(
+  Test = "Bartlett",
+  Statistique = bartlett_D$statistic,
+  "p-value" = bartlett_D$p.value,
+  check.names = FALSE
+)
+
+kable(tableau_bartlett_D,
+      digits = 4,
+      caption = "Test d'homogénéité des variances",
+      row.names = FALSE)
+```
+
+**Interprétation du test de Bartlett**
+
+**Indépendance des erreurs**
+
+L'indépendance des erreurs repose sur les conditions de préparation des prélèvements et sur la randomisation de l'ordre des mesures.
+
+**Limite liée au caractère destructif de la méthode**
+
+La variabilité résiduelle peut inclure à la fois la variabilité propre au système de mesure et celle liée à l'hétérogénéité des prélèvements.
+
+La vérification des hypothèses statistiques ne permet pas de démontrer l'homogénéité des prélèvements issus d'un même lot.
+
+Le faible nombre de répétitions limite également la puissance des tests statistiques.
+
+\FloatBarrier
+
+### Gage R&R imbriqué
+
+L'étude Gage R\&R est réalisée à l'aide d'un modèle à effets aléatoires imbriqués.
+
+L'estimation des composantes de variance est réalisée par la méthode du maximum de vraisemblance restreint
+(REML).
+
+L'intervalle de tolérance est calculé de la manière suivante :
+
+$$
+T = LSS - LSI = 105 - 95 = 10
+$$
+
+```{r msa-d-gage}
+modele_D <- lmer(
+  Resultat ~ 1 + (1 | Technicien/lots),
+  data = data_D,
+  REML = TRUE
+)
+
+summary(modele_D)
+
+variances_D <- as.data.frame(VarCorr(modele_D))
+
+kable(variances_D,
+      digits = 6,
+      caption = "Composantes de variance du modèle imbriqué",
+      row.names = FALSE)
+
+isSingular(modele_D)
+```
+
+**Calcul des composantes de variance**
+
+```{r msa-d-composantes}
+var_repeat_D <- sigma(modele_D)^2
+
+var_reprod_D <- variances_D$vcov[
+  variances_D$grp == "Technicien"
+]
+
+var_lots_D <- variances_D$vcov[
+  variances_D$grp %in% c(
+    "lots:Technicien",
+    "Technicien:lots"
+  )
+]
+
+var_gage_D <- var_repeat_D + var_reprod_D
+
+var_total_D <- var_gage_D + var_lots_D
+
+composantes_D <- data.frame(
+  Source = c(
+    "Total Gage R&R",
+    "Répétabilité",
+    "Reproductibilité",
+    "Lots imbriqués",
+    "Variation totale"
+  ),
+  VarComp = c(
+    var_gage_D,
+    var_repeat_D,
+    var_reprod_D,
+    var_lots_D,
+    var_total_D
+  )
+)
+
+composantes_D$Contribution <-
+  100 * composantes_D$VarComp / var_total_D
+
+composantes_D$StdDev <-
+  sqrt(composantes_D$VarComp)
+
+composantes_D$StudyVar <-
+  6 * composantes_D$StdDev
+
+composantes_D$Pourcentage_StudyVar <-
+  100 * composantes_D$StdDev / sqrt(var_total_D)
+
+composantes_D$Pourcentage_Tolerance <-
+  100 * composantes_D$StudyVar / 10
+
+kable(composantes_D,
+      digits = 4,
+      col.names = c(
+        "Source",
+        "VarComp",
+        "Contribution (%)",
+        "StdDev",
+        "StudyVar",
+        "% StudyVar",
+        "% Tolerance"
+      ),
+      caption = "Résultats du Gage R&R imbriqué",
+      row.names = FALSE)
+```
+
+**Nombre de catégories distinctes**
+
+```{r msa-d-ndc}
+ndc_D <- if (var_gage_D > 0) {
+  max(1, floor(1.41 * sqrt(var_lots_D / var_gage_D)))
+} else {
+  NA_real_
+}
+
+kable(
+  data.frame(
+    Indicateur = "Nombre de catégories distinctes",
+    Valeur = ndc_D
+  ),
+  caption = "Capacité théorique de discrimination",
+  row.names = FALSE
+)
+```
+
+Dans cette approche alternative, le nombre de catégories distinctes est calculé à partir de la variance des groupes imbriqués et non de la variance inter-lots isolée.
+
+Les indicateurs du Gage R\&R imbriqué doivent donc être interprétés avec prudence.
+
+**Répétabilité**
+
+**Reproductibilité**
+
+**Variabilité des lots imbriqués**
+
+**Acceptabilité du système de mesure**
+
+**Nombre de catégories distinctes**
+
+### Graphiques du Gage R&R imbriqué
+
+**Graphique des composantes de variation**
+
+```{r msa-d-variation, fig.width=7, fig.height=4.5, out.width="100%"}
+graph_D <- composantes_D[1:4, ]
+
+graph_D$Source <- factor(
+  graph_D$Source,
+  levels = graph_D$Source
+)
+
+ggplot(graph_D,
+       aes(x = Source,
+           y = Contribution,
+           fill = Source)) +
+  geom_col() +
+  geom_text(
+    aes(label = paste0(round(Contribution, 2), "%")),
+    vjust = -0.5
+  ) +
+  scale_fill_manual(
+    values = c("#2874A6", "#E67E22",
+               "#C0392B", "#27AE60")
+  ) +
+  scale_y_continuous(
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  labs(
+    title = "Composantes de variation",
+    x = NULL,
+    y = "Contribution à la variance totale (%)"
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 25, hjust = 1)
+  )
+```
+
+\begin{center}
+\textit{Composantes de variation de l'analyse D}
+\end{center}
+
+**Interprétation des composantes de variation**
+
+**Résultats par technicien**
+
+```{r msa-d-techniciens, out.width="100%"}
+ggplot(data_D,
+       aes(x = Technicien,
+           y = Resultat,
+           fill = Technicien)) +
+  geom_boxplot(alpha = 0.5) +
+  geom_jitter(width = 0.1, size = 2) +
+  theme_bw() +
+  labs(
+    title = "Résultats par technicien",
+    x = "Technicien",
+    y = "Teneur en protéines totales (%)"
+  ) +
+  theme(legend.position = "none")
+```
+
+\begin{center}
+\textit{Distribution des résultats par technicien}
+\end{center}
+
+**Interprétation des résultats par technicien**
+
+**Résultats par groupe imbriqué**
+
+```{r msa-d-lots-imbriques, out.width="100%"}
+ggplot(data_D,
+       aes(x = lots,
+           y = Resultat,
+           color = Technicien)) +
+  geom_point(size = 3) +
+  facet_wrap(~ Technicien) +
+  theme_bw() +
+  labs(
+    title = "Résultats par lot et par technicien",
+    x = "Lots",
+    y = "Teneur en protéines totales (%)"
+  ) +
+  theme(legend.position = "none")
+```
+
+\begin{center}
+\textit{Résultats par groupe de prélèvements imbriqué}
+\end{center}
+
+**Interprétation des résultats par groupe imbriqué**
+
+**Carte des étendues (carte R)**
+
+```{r msa-d-carte-r, out.width="100%"}
+cartes_D <- data_D %>%
+  group_by(Technicien, lots) %>%
+  summarise(
+    Moyenne = mean(Resultat),
+    Etendue = max(Resultat) - min(Resultat),
+    .groups = "drop"
+  )
+
+Rbar_D <- mean(cartes_D$Etendue)
+
+LIC_R_D <- 0
+LSC_R_D <- 3.267 * Rbar_D
+
+ggplot(cartes_D,
+       aes(x = lots,
+           y = Etendue,
+           group = Technicien)) +
+  geom_line(color = "#2874A6") +
+  geom_point(color = "#2874A6") +
+  geom_hline(
+    yintercept = Rbar_D,
+    color = "blue",
+    linetype = "dashed"
+  ) +
+  geom_hline(
+    yintercept = LSC_R_D,
+    color = "red",
+    linetype = "dashed"
+  ) +
+  geom_hline(
+    yintercept = LIC_R_D,
+    color = "red",
+    linetype = "dashed"
+  ) +
+  facet_wrap(~ Technicien) +
+  theme_bw() +
+  labs(
+    title = "Carte des étendues",
+    x = "Lots",
+    y = "Étendue"
+  )
+```
+
+\begin{center}
+\textit{Carte des étendues de l'analyse D}
+\end{center}
+
+**Interprétation de la carte des étendues**
+
+**Carte des moyennes (carte X-barre)**
+
+```{r msa-d-carte-x, out.width="100%"}
+Xbar_D <- mean(cartes_D$Moyenne)
+
+LIC_X_D <- Xbar_D - 1.880 * Rbar_D
+LSC_X_D <- Xbar_D + 1.880 * Rbar_D
+
+ggplot(cartes_D,
+       aes(x = lots,
+           y = Moyenne,
+           group = Technicien)) +
+  geom_line(color = "#2874A6") +
+  geom_point(color = "#2874A6") +
+  geom_hline(
+    yintercept = Xbar_D,
+    color = "blue",
+    linetype = "dashed"
+  ) +
+  geom_hline(
+    yintercept = LSC_X_D,
+    color = "red",
+    linetype = "dashed"
+  ) +
+  geom_hline(
+    yintercept = LIC_X_D,
+    color = "red",
+    linetype = "dashed"
+  ) +
+  facet_wrap(~ Technicien) +
+  theme_bw() +
+  labs(
+    title = "Carte des moyennes",
+    x = "Lots",
+    y = "Moyenne"
+  )
+```
+
+\begin{center}
+\textit{Carte des moyennes de l'analyse D}
+\end{center}
+
+**Interprétation de la carte des moyennes**
+
+Les constantes utilisées pour les cartes de contrôle correspondent à des sous-groupes de deux mesures :
+
+- $D_3 = 0$ ;
+- $D_4 = 3,267$ ;
+- $A_2 = 1,880$.
+
+Ces cartes constituent des outils de diagnostic du système de mesure et non des cartes de suivi chronologique du procédé.
+
+\FloatBarrier
+
+### Interprétation et recommandations
+
+**Interprétation globale**
+
+**Limites de l'étude**
+
+**Recommandations**
+
+**Conclusion de l'analyse D**
+
+\newpage
+
+## Analyse E – Dosage du conservateur par HPLC-UV
+
+### Présentation des données
+
+```{r msa-e-preparation}
+data_E <- MSA_E %>%
+  mutate(
+    Technicien = factor(Technicien),
+    lots = factor(lots),
+    Runs = factor(Runs),
+    Lot_imbrique = interaction(Technicien, lots)
+  )
+
+kable(data_E[, c("Technicien", "lots", "Runs", "Resultat")],
+      caption = "Données expérimentales de l'analyse E")
+```
+
+L'analyse E porte sur le dosage du conservateur par chromatographie liquide haute performance avec détection UV (HPLC-UV), par rapport à un étalon de référence.
+
+Le plan expérimental comprend :
+
+- **3 techniciens** : Jeanne, Julia et Mathilde ;
+- **4 lots** : Q475J, Q562A, X584G et Y717T ;
+- **2 répétitions** par lot et par technicien ;
+- **24 mesures** au total.
+
+Les limites de spécification sont fixées entre 95 et 105 \%, soit une tolérance de 10 points de pourcentage.
+
+La méthode analytique étant destructive, chaque mesure est réalisée sur un prélèvement distinct.
+
+**Vérification du plan expérimental**
+
+```{r msa-e-plan}
+plan_E <- with(data_E, table(lots, Technicien))
+
+kable(plan_E,
+      caption = "Répartition des mesures par lot et par technicien")
+```
+
+Une approche imbriquée est étudiée en considérant les groupes de prélèvements propres à chaque technicien.
+
+Cette approche constitue une alternative au modèle croisé, puisque les lots physiques sont communs aux trois techniciens.
+
+Elle ne permet pas de distinguer la variabilité inter-lots de l'interaction entre le lot et le technicien.
+
+\textcolor{red}{Le caractère destructif de la méthode ne permet pas de dissocier complètement la variabilité liée à la répétabilité du système de mesure de celle liée à l'hétérogénéité des prélèvements.}
+
+### Statistiques descriptives
+
+```{r msa-e-statistiques}
+stat_E <- data_E %>%
+  group_by(Technicien) %>%
+  summarise(
+    Effectif = n(),
+    Moyenne = mean(Resultat),
+    Ecart_type = sd(Resultat),
+    Minimum = min(Resultat),
+    Maximum = max(Resultat),
+    .groups = "drop"
+  )
+
+kable(stat_E,
+      digits = 3,
+      caption = "Statistiques descriptives par technicien")
+```
+
+```{r msa-e-graphique, fig.width=7, fig.height=4.5, out.width="100%"}
+ggplot(data_E, aes(x = lots,
+                   y = Resultat,
+                   color = Technicien)) +
+  geom_point(size = 3) +
+  theme_bw() +
+  labs(
+    x = "Lots",
+    y = "Teneur en conservateur (%)",
+    color = "Technicien"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+\begin{center}
+\textit{Distribution des résultats par lot et par technicien}
+\end{center}
+
+\FloatBarrier
+
+**Comparaison des moyennes entre les techniciens**
+
+**Comparaison de la dispersion des résultats**
+
+**Analyse graphique des résultats**
+
+**Respect des spécifications**
+
+### Analyse de variance imbriquée
+
+Une analyse de variance imbriquée est réalisée afin d'étudier l'influence du technicien et des groupes de prélèvements imbriqués dans les techniciens.
+
+Le modèle statistique étudié est le suivant :
+
+$$
+Y_{ijk} = \mu + T_i + L_{j(i)} + \varepsilon_{ijk}
+$$
+
+Avec :
+
+- $\mu$ : moyenne générale ;
+- $T_i$ : effet du technicien ;
+- $L_{j(i)}$ : effet du groupe imbriqué dans le technicien ;
+- $\varepsilon_{ijk}$ : erreur résiduelle.
+
+Le seuil de significativité est fixé à 5 \%.
+
+```{r msa-e-anova}
+anova_E <- aov(
+  Resultat ~ Technicien / lots,
+  data = data_E
+)
+
+tab_E <- summary(anova_E)[[1]]
+
+F_technicien_E <- tab_E[1, "Mean Sq"] /
+                  tab_E[2, "Mean Sq"]
+
+F_lot_E <- tab_E[2, "Mean Sq"] /
+           tab_E[3, "Mean Sq"]
+
+resultats_anova_E <- data.frame(
+  Facteur = c(
+    "Technicien",
+    "Lot imbriqué",
+    "Résidus"
+  ),
+  Df = tab_E[, "Df"],
+  Sum_Sq = tab_E[, "Sum Sq"],
+  Mean_Sq = tab_E[, "Mean Sq"],
+  F = c(
+    F_technicien_E,
+    F_lot_E,
+    NA
+  ),
+  p_value = c(
+    pf(F_technicien_E,
+       tab_E[1, "Df"],
+       tab_E[2, "Df"],
+       lower.tail = FALSE),
+    pf(F_lot_E,
+       tab_E[2, "Df"],
+       tab_E[3, "Df"],
+       lower.tail = FALSE),
+    NA
+  )
+)
+
+kable(resultats_anova_E,
+      digits = 5,
+      caption = "ANOVA du modèle imbriqué",
+      row.names = FALSE)
+```
+
+**Influence du technicien**
+
+**Influence du lot imbriqué dans le technicien**
+
+**Conclusion de l'ANOVA**
+
+### Vérification des hypothèses
+
+**Normalité des résidus**
+
+Le test de Shapiro-Wilk permet d'évaluer la compatibilité de la distribution des résidus avec une distribution normale.
+
+Les hypothèses du test sont les suivantes :
+
+- $H_0$ : les résidus suivent une distribution normale.
+- $H_1$ : les résidus ne suivent pas une distribution normale.
+
+```{r msa-e-normalite}
+shapiro_E <- shapiro.test(residuals(anova_E))
+
+tableau_shapiro_E <- data.frame(
+  Test = "Shapiro-Wilk",
+  W = shapiro_E$statistic,
+  "p-value" = shapiro_E$p.value,
+  check.names = FALSE
+)
+
+kable(tableau_shapiro_E,
+      digits = 4,
+      caption = "Test de normalité des résidus",
+      row.names = FALSE)
+```
+
+```{r msa-e-qqplot}
+qqnorm(
+  residuals(anova_E),
+  main = "QQ-plot des résidus",
+  xlab = "Quantiles théoriques",
+  ylab = "Quantiles observés"
+)
+
+qqline(residuals(anova_E),
+       col = "red")
+```
+
+\begin{center}
+\textit{QQ-plot des résidus de l'analyse E}
+\end{center}
+
+\FloatBarrier
+
+**Interprétation du test de Shapiro-Wilk**
+
+**Interprétation du QQ-plot**
+
+**Homoscédasticité**
+
+L'homoscédasticité correspond à l'hypothèse selon laquelle la variance des erreurs est constante.
+
+```{r msa-e-homoscedasticite}
+plot(
+  fitted(anova_E),
+  residuals(anova_E),
+  xlab = "Valeurs ajustées",
+  ylab = "Résidus",
+  main = "Résidus en fonction des valeurs ajustées"
+)
+
+abline(h = 0,
+       col = "red",
+       lty = 2)
+```
+
+\begin{center}
+\textit{Résidus en fonction des valeurs ajustées}
+\end{center}
+
+\FloatBarrier
+
+**Interprétation du graphique des résidus**
+
+**Test de Bartlett**
+
+Les hypothèses du test sont les suivantes :
+
+- $H_0$ : les variances sont homogènes.
+- $H_1$ : au moins une variance est différente.
+
+```{r msa-e-bartlett}
+bartlett_E <- bartlett.test(
+  Resultat ~ Lot_imbrique,
+  data = data_E
+)
+
+tableau_bartlett_E <- data.frame(
+  Test = "Bartlett",
+  Statistique = bartlett_E$statistic,
+  "p-value" = bartlett_E$p.value,
+  check.names = FALSE
+)
+
+kable(tableau_bartlett_E,
+      digits = 4,
+      caption = "Test d'homogénéité des variances",
+      row.names = FALSE)
+```
+
+**Interprétation du test de Bartlett**
+
+**Indépendance des erreurs**
+
+L'indépendance des erreurs repose sur les conditions de préparation des prélèvements et sur la randomisation de l'ordre des mesures.
+
+**Limite liée au caractère destructif de la méthode**
+
+La variabilité résiduelle peut inclure à la fois la variabilité propre au système de mesure et celle liée à l'hétérogénéité des prélèvements.
+
+La vérification des hypothèses statistiques ne permet pas de démontrer l'homogénéité des prélèvements issus d'un même lot.
+
+Le faible nombre de répétitions limite également la puissance des tests statistiques.
+
+\FloatBarrier
+
+### Gage R&R imbriqué
+
+L'étude Gage R\&R est réalisée à l'aide d'un modèle à effets aléatoires imbriqués.
+
+L'estimation des composantes de variance est réalisée par la méthode du maximum de vraisemblance restreint
+(REML).
+
+L'intervalle de tolérance est calculé de la manière suivante :
+
+$$
+T = LSS - LSI = 105 - 95 = 10
+$$
+
+```{r msa-e-gage}
+modele_E <- lmer(
+  Resultat ~ 1 + (1 | Technicien/lots),
+  data = data_E,
+  REML = TRUE
+)
+
+summary(modele_E)
+
+variances_E <- as.data.frame(VarCorr(modele_E))
+
+kable(variances_E,
+      digits = 6,
+      caption = "Composantes de variance du modèle imbriqué",
+      row.names = FALSE)
+
+isSingular(modele_E)
+```
+
+**Calcul des composantes de variance**
+
+```{r msa-e-composantes}
+var_repeat_E <- sigma(modele_E)^2
+
+var_reprod_E <- variances_E$vcov[
+  variances_E$grp == "Technicien"
+]
+
+var_lots_E <- variances_E$vcov[
+  variances_E$grp %in% c(
+    "lots:Technicien",
+    "Technicien:lots"
+  )
+]
+
+var_gage_E <- var_repeat_E + var_reprod_E
+
+var_total_E <- var_gage_E + var_lots_E
+
+composantes_E <- data.frame(
+  Source = c(
+    "Total Gage R&R",
+    "Répétabilité",
+    "Reproductibilité",
+    "Lots imbriqués",
+    "Variation totale"
+  ),
+  VarComp = c(
+    var_gage_E,
+    var_repeat_E,
+    var_reprod_E,
+    var_lots_E,
+    var_total_E
+  )
+)
+
+composantes_E$Contribution <-
+  100 * composantes_E$VarComp / var_total_E
+
+composantes_E$StdDev <-
+  sqrt(composantes_E$VarComp)
+
+composantes_E$StudyVar <-
+  6 * composantes_E$StdDev
+
+composantes_E$Pourcentage_StudyVar <-
+  100 * composantes_E$StdDev / sqrt(var_total_E)
+
+composantes_E$Pourcentage_Tolerance <-
+  100 * composantes_E$StudyVar / 10
+
+kable(composantes_E,
+      digits = 4,
+      col.names = c(
+        "Source",
+        "VarComp",
+        "Contribution (%)",
+        "StdDev",
+        "StudyVar",
+        "% StudyVar",
+        "% Tolerance"
+      ),
+      caption = "Résultats du Gage R&R imbriqué",
+      row.names = FALSE)
+```
+
+**Nombre de catégories distinctes**
+
+```{r msa-e-ndc}
+ndc_E <- if (var_gage_E > 0) {
+  max(1, floor(1.41 * sqrt(var_lots_E / var_gage_E)))
+} else {
+  NA_real_
+}
+
+kable(
+  data.frame(
+    Indicateur = "Nombre de catégories distinctes",
+    Valeur = ndc_E
+  ),
+  caption = "Capacité théorique de discrimination",
+  row.names = FALSE
+)
+```
+
+Dans cette approche alternative, le nombre de catégories distinctes est calculé à partir de la variance des groupes imbriqués et non de la variance inter-lots isolée.
+
+Les indicateurs du Gage R\&R imbriqué doivent donc être interprétés avec prudence.
+
+**Répétabilité**
+
+**Reproductibilité**
+
+**Variabilité des lots imbriqués**
+
+**Acceptabilité du système de mesure**
+
+**Nombre de catégories distinctes**
+
+### Graphiques du Gage R&R imbriqué
+
+**Graphique des composantes de variation**
+
+```{r msa-e-variation, fig.width=7, fig.height=4.5, out.width="100%"}
+graph_E <- composantes_E[1:4, ]
+
+graph_E$Source <- factor(
+  graph_E$Source,
+  levels = graph_E$Source
+)
+
+ggplot(graph_E,
+       aes(x = Source,
+           y = Contribution,
+           fill = Source)) +
+  geom_col() +
+  geom_text(
+    aes(label = paste0(round(Contribution, 2), "%")),
+    vjust = -0.5
+  ) +
+  scale_fill_manual(
+    values = c("#2874A6", "#E67E22",
+               "#C0392B", "#27AE60")
+  ) +
+  scale_y_continuous(
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  labs(
+    title = "Composantes de variation",
+    x = NULL,
+    y = "Contribution à la variance totale (%)"
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 25, hjust = 1)
+  )
+```
+
+\begin{center}
+\textit{Composantes de variation de l'analyse E}
+\end{center}
+
+**Interprétation des composantes de variation**
+
+**Résultats par technicien**
+
+```{r msa-e-techniciens, out.width="100%"}
+ggplot(data_E,
+       aes(x = Technicien,
+           y = Resultat,
+           fill = Technicien)) +
+  geom_boxplot(alpha = 0.5) +
+  geom_jitter(width = 0.1, size = 2) +
+  theme_bw() +
+  labs(
+    title = "Résultats par technicien",
+    x = "Technicien",
+    y = "Teneur en conservateur (%)"
+  ) +
+  theme(legend.position = "none")
+```
+
+\begin{center}
+\textit{Distribution des résultats par technicien}
+\end{center}
+
+**Interprétation des résultats par technicien**
+
+**Résultats par groupe imbriqué**
+
+```{r msa-e-lots-imbriques, out.width="100%"}
+ggplot(data_E,
+       aes(x = lots,
+           y = Resultat,
+           color = Technicien)) +
+  geom_point(size = 3) +
+  facet_wrap(~ Technicien) +
+  theme_bw() +
+  labs(
+    title = "Résultats par lot et par technicien",
+    x = "Lots",
+    y = "Teneur en conservateur (%)"
+  ) +
+  theme(legend.position = "none")
+```
+
+\begin{center}
+\textit{Résultats par groupe de prélèvements imbriqué}
+\end{center}
+
+**Interprétation des résultats par groupe imbriqué**
+
+**Carte des étendues (carte R)**
+
+```{r msa-e-carte-r, out.width="100%"}
+cartes_E <- data_E %>%
+  group_by(Technicien, lots) %>%
+  summarise(
+    Moyenne = mean(Resultat),
+    Etendue = max(Resultat) - min(Resultat),
+    .groups = "drop"
+  )
+
+Rbar_E <- mean(cartes_E$Etendue)
+
+LIC_R_E <- 0
+LSC_R_E <- 3.267 * Rbar_E
+
+ggplot(cartes_E,
+       aes(x = lots,
+           y = Etendue,
+           group = Technicien)) +
+  geom_line(color = "#2874A6") +
+  geom_point(color = "#2874A6") +
+  geom_hline(
+    yintercept = Rbar_E,
+    color = "blue",
+    linetype = "dashed"
+  ) +
+  geom_hline(
+    yintercept = LSC_R_E,
+    color = "red",
+    linetype = "dashed"
+  ) +
+  geom_hline(
+    yintercept = LIC_R_E,
+    color = "red",
+    linetype = "dashed"
+  ) +
+  facet_wrap(~ Technicien) +
+  theme_bw() +
+  labs(
+    title = "Carte des étendues",
+    x = "Lots",
+    y = "Étendue"
+  )
+```
+
+\begin{center}
+\textit{Carte des étendues de l'analyse E}
+\end{center}
+
+**Interprétation de la carte des étendues**
+
+**Carte des moyennes (carte X-barre)**
+
+```{r msa-e-carte-x, out.width="100%"}
+Xbar_E <- mean(cartes_E$Moyenne)
+
+LIC_X_E <- Xbar_E - 1.880 * Rbar_E
+LSC_X_E <- Xbar_E + 1.880 * Rbar_E
+
+ggplot(cartes_E,
+       aes(x = lots,
+           y = Moyenne,
+           group = Technicien)) +
+  geom_line(color = "#2874A6") +
+  geom_point(color = "#2874A6") +
+  geom_hline(
+    yintercept = Xbar_E,
+    color = "blue",
+    linetype = "dashed"
+  ) +
+  geom_hline(
+    yintercept = LSC_X_E,
+    color = "red",
+    linetype = "dashed"
+  ) +
+  geom_hline(
+    yintercept = LIC_X_E,
+    color = "red",
+    linetype = "dashed"
+  ) +
+  facet_wrap(~ Technicien) +
+  theme_bw() +
+  labs(
+    title = "Carte des moyennes",
+    x = "Lots",
+    y = "Moyenne"
+  )
+```
+
+\begin{center}
+\textit{Carte des moyennes de l'analyse E}
+\end{center}
+
+**Interprétation de la carte des moyennes**
+
+Les constantes utilisées pour les cartes de contrôle correspondent à des sous-groupes de deux mesures :
+
+- $D_3 = 0$ ;
+- $D_4 = 3,267$ ;
+- $A_2 = 1,880$.
+
+Ces cartes constituent des outils de diagnostic du système de mesure et non des cartes de suivi chronologique du procédé.
+
+\FloatBarrier
+
+### Interprétation et recommandations
+
+**Interprétation globale**
+
+**Limites de l'étude**
+
+**Recommandations**
+
+**Conclusion de l'analyse E**
+
+\newpage
