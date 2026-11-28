@@ -54,13 +54,46 @@ MSA_B <- read_excel(paste0(chemin, "Groupe_n1_s2_MSA_Analyse_B_2627.xlsx"))
 MSA_C <- read_excel(paste0(chemin, "Groupe_n1_s2_MSA_Analyse_C_2627.xlsx"))
 MSA_D <- read_excel(paste0(chemin, "Groupe_n1_s2_MSA_Analyse_D_2627.xlsx"))
 MSA_E <- read_excel(paste0(chemin, "Groupe_n1_s2_MSA_Analyse_E_2627.xlsx"))
+
+LSI <- 95
+LSS <- 105
+Cible <- 100
+Tolerance <- LSS - LSI
+
+graphique_specifications <- function(data, titre_y) {
+  ggplot(data, aes(x = lots, y = Resultat, color = Technicien)) +
+    geom_hline(yintercept = c(LSI, LSS), color = "red", linetype = "dashed") +
+    geom_hline(yintercept = Cible, color = "black", linetype = "dotted") +
+    geom_point(position = position_jitterdodge(jitter.width = 0.1, dodge.width = 0.6, seed = 42), size = 3) +
+    expand_limits(y = c(LSI, LSS)) +
+    scale_color_manual(values = c("#0072B2", "#E69F00", "#CC79A7")) +
+    labs(x = "Lots", y = titre_y, color = "Technicien",
+         caption = "Rouge : spécifications ; Noir : cible") +
+    theme_bw() +
+    theme(legend.position = "bottom")
+}
 ```
 
 \newpage
 
 # Introduction générale
+Dans le domaine pharmaceutique, la fiabilité des systèmes de mesure est essentielle pour garantir la qualité des produits, la conformité aux spécifications et la sécurité des patients. Une variabilité excessive des mesures peut conduire à des décisions erronées concernant la conformité des lots. Il est donc nécessaire d'évaluer les performances des méthodes analytiques utilisées lors des contrôles qualité.
 
-Le laboratoire Pharmacopex souhaite étudier plusieurs problématiques statistiques liées au contrôle qualité.
+L'analyse des systèmes de mesure (MSA, *Measurement System Analysis*) permet d'identifier et de quantifier les différentes sources de variabilité associées à un système de mesure. Elle repose notamment sur l'étude Gage R&R (*Repeatability and Reproducibility*), qui permet d'évaluer la répétabilité des mesures, la reproductibilité entre les techniciens et la capacité du système à distinguer les différences entre les lots.
+
+Dans le cadre de cette étude, l'entreprise pharmaceutique fictive Pharmacopex souhaite évaluer les performances de cinq méthodes analytiques utilisées pour le contrôle qualité d'un vaccin injectable :
+
+- **Analyse A :** dosage de l'antigène ;
+- **Analyse B :** dosage de l'adjuvant ;
+- **Analyse C :** mesure de l'activité immunologique ;
+- **Analyse D :** dosage des protéines totales par méthode colorimétrique ;
+- **Analyse E :** dosage du conservateur par HPLC-UV.
+
+Chaque analyse est étudiée indépendamment à l'aide du logiciel R. La démarche statistique comprend une analyse descriptive des données, une analyse de variance (ANOVA), une vérification des hypothèses de normalité et d'homoscédasticité des résidus, ainsi qu'une étude Gage R&R. Des modèles croisés ou imbriqués sont étudiés en tenant compte du caractère destructif ou non destructif des méthodes analytiques et de la structure des plans expérimentaux.
+
+L'objectif est de déterminer l'acceptabilité de chaque système de mesure au regard des limites de spécification fixées entre 95 et 105 %, d'identifier les principales sources de variabilité et d'évaluer la capacité de discrimination des systèmes de mesure. Une analyse critique des résultats et des limites expérimentales est également réalisée afin de proposer, lorsque cela est nécessaire, des recommandations et des actions correctives adaptées à chaque méthode analytique.
+
+\newpage
 
 # MSA – Analyse des systèmes de mesure
 
@@ -89,6 +122,17 @@ data_A <- MSA_A %>%
 
 kable(data_A, caption = "Données expérimentales de l'analyse A")
 ```
+
+```{r msa-a-specifications-graphique}
+graphique_specifications(data_A, "Concentration en antigène (%)")
+```
+
+\begin{center}
+\textit{Distribution des mesures de l'antigène avec les limites de spécification}
+\end{center}
+
+\FloatBarrier
+
 Le plan expérimental est donc **croisé et équilibré**, sous réserve que les mêmes échantillons soient utilisés par chaque technicien.
 
 Cette configuration permet d'évaluer :
@@ -225,14 +269,26 @@ Les points du QQ-plot sont globalement alignés sur la droite théorique, ce qui
 L'étude Gage R&R permet de quantifier la variabilité du système de mesure en distinguant la répétabilité,la reproductibilité et la variabilité entre les lots.
 
 ```{r msa-a-gage, fig.width=12, fig.height=8, out.width="100%"}
-ss.rr(
+gage_A <- ss.rr(
   var = Resultat,
   part = lots,
   appr = Technicien,
-  data = data_A,
-  tolerance = 10
+  lsl = 95,
+  usl = 105,
+  sigma = 6,
+  tolerance = 105 - 95,
+  data = MSA_A,
+  main = "Gage R&R croisé - Analyse A",
+  sub = "Dosage de l'antigène",
+  alphaLim = 0.05,
+  errorTerm = "interaction",
+  digits = 4,
+  method = "crossed",
+  print_plot = TRUE,
+  signifstars = FALSE
 )
 ```
+
 **Choix du modèle statistique**
 
 - La p-value de l'interaction lot $\times$ technicien est de **0,839**, donc supérieure à 0,05.
@@ -337,6 +393,17 @@ data_B <- MSA_B %>%
 
 kable(data_B, caption = "Données expérimentales de l'analyse B")
 ```
+
+```{r msa-b-specifications-graphique}
+graphique_specifications(data_B, "Concentration en adjuvant (%)")
+```
+
+\begin{center}
+\textit{Distribution des mesures de l'adjuvant avec les limites de spécification}
+\end{center}
+
+\FloatBarrier
+
 L'analyse B porte sur la mesure de la teneur en adjuvant.
 
 Le plan expérimental comprend :
@@ -538,14 +605,26 @@ La présence de ces résidus extrêmes suggère une variabilité plus importante
 L'étude Gage R\&R permet de quantifier la variabilité du système de mesure de la teneur en adjuvant en distinguant la répétabilité, la reproductibilité et la variabilité inter-lots.
 
 ```{r msa-b-gage, fig.width=12, fig.height=8, out.width="100%"}
-ss.rr(
+gage_B <- ss.rr(
   var = Resultat,
   part = lots,
   appr = Technicien,
-  data = data_B,
-  tolerance = 10
+  lsl = 95,
+  usl = 105,
+  sigma = 6,
+  tolerance = 105 - 95,
+  data = MSA_B,
+  main = "Gage R&R croisé - Analyse B",
+  sub = "Dosage de l'adjuvant",
+  alphaLim = 0.05,
+  errorTerm = "interaction",
+  digits = 4,
+  method = "crossed",
+  print_plot = TRUE,
+  signifstars = FALSE
 )
 ```
+
 **Choix du modèle statistique**
 
 - La p-value de l'interaction lot $\times$ technicien est de **0,656**, donc supérieure à 0,05.
@@ -655,6 +734,16 @@ data_C <- MSA_C %>%
 
 kable(data_C, caption = "Données expérimentales de l'analyse C")
 ```
+
+```{r msa-c-specifications-graphique}
+graphique_specifications(data_C, "Activité immunologique (%)")
+```
+
+\begin{center}
+\textit{Distribution des mesures de l'activité immunologique avec les limites de spécification}
+\end{center}
+
+\FloatBarrier
 
 L'analyse C porte sur la mesure de l'activité immunologique.
 
@@ -876,14 +965,26 @@ kable(tableau_bartlett_C,
 L'étude Gage R\&R permet de quantifier la variabilité du système de mesure de l'activité immunologique en distinguant la répétabilité, la reproductibilité et la variabilité inter-lots.
 
 ```{r msa-c-gage, fig.width=12, fig.height=8, out.width="100%"}
-ss.rr(
+gage_C <- ss.rr(
   var = Resultat,
   part = lots,
   appr = Technicien,
-  data = data_C,
-  tolerance = 10
+  lsl = 95,
+  usl = 105,
+  sigma = 6,
+  tolerance = 105 - 95,
+  data = MSA_C,
+  main = "Gage R&R croisé - Analyse C",
+  sub = "Mesure de l'activité immunologique",
+  alphaLim = 0.05,
+  errorTerm = "interaction",
+  digits = 4,
+  method = "crossed",
+  print_plot = TRUE,
+  signifstars = FALSE
 )
 ```
+
 **Choix du modèle statistique**
 
 - La p-value de l'interaction lot $\times$ technicien est de **0,000366**, donc inférieure à 0,05.
@@ -1010,6 +1111,14 @@ data_D <- MSA_D %>%
 kable(data_D[, c("Technicien", "lots", "Runs", "Resultat")],
       caption = "Données expérimentales de l'analyse D")
 ```
+
+```{r msa-d-specifications-graphique}
+graphique_specifications(data_D, "Teneur en protéines totales (%)")
+```
+
+\begin{center}
+\textit{Distribution des mesures des protéines totales avec les limites de spécification}
+\end{center}
 
 L'analyse D porte sur le dosage des protéines totales (antigène et protéines associées) par une méthode colorimétrique.
 
@@ -1155,10 +1264,31 @@ kable(resultats_anova_D,
 ```
 
 **Influence du technicien**
+La p-value associée au facteur technicien est de 0,99982, largement supérieure au seuil de significativité de 0,05.
+
+L'hypothèse nulle n'est donc pas rejetée. Aucune différence statistiquement significative n'est mise en évidence entre les trois techniciens.
+
+De plus, la faible valeur de la statistique de Fisher (F = 0,00018) indique que la variabilité entre les techniciens est très faible par rapport à celle des groupes imbriqués.
+
+Ces résultats suggèrent une bonne reproductibilité entre les techniciens, sans toutefois permettre de démontrer leur équivalence.
 
 **Influence du lot imbriqué dans le technicien**
+La p-value associée au facteur lot imbriqué est inférieure à 0,00001, donc largement inférieure au seuil de significativité de 0,05.
+
+L'hypothèse nulle est rejetée. Il existe une différence statistiquement significative entre les groupes de prélèvements imbriqués dans les techniciens.
+
+La valeur élevée de la statistique de Fisher (F = 1022,37501) montre que la variabilité entre ces groupes est largement supérieure à la variabilité résiduelle.
+
+Ce résultat suggère une bonne capacité du système de mesure à distinguer les groupes de prélèvements.
+
+Cependant, le modèle imbriqué ne permet pas de dissocier la variabilité inter-lots de l'interaction entre le lot et le technicien.
 
 **Conclusion de l'ANOVA**
+L'analyse de variance imbriquée met en évidence une influence significative des groupes de prélèvements, contrairement au facteur technicien.
+
+La variabilité observée est principalement associée aux groupes imbriqués, tandis que les variabilités résiduelle et inter-techniciens apparaissent faibles.
+
+\textcolor{red}{Ces premiers résultats suggèrent une bonne répétabilité et une bonne reproductibilité du système de mesure. Toutefois, la vérification des hypothèses de l'ANOVA et l'étude Gage R\&R restent nécessaires pour confirmer son acceptabilité.}
 
 ### Vérification des hypothèses
 
@@ -1187,6 +1317,16 @@ kable(tableau_shapiro_D,
       row.names = FALSE)
 ```
 
+**Interprétation du test de Shapiro-Wilk**
+
+Le test de Shapiro-Wilk fournit une statistique W de 0,9469 et une p-value de 0,2325.
+
+La p-value étant supérieure au seuil de significativité de 0,05, l'hypothèse nulle de normalité des résidus n'est pas rejetée.
+
+La distribution des résidus est donc compatible avec une distribution normale.
+
+Cependant, le faible nombre d'observations limite la puissance du test statistique.
+
 ```{r msa-d-qqplot}
 qqnorm(
   residuals(anova_D),
@@ -1205,9 +1345,13 @@ qqline(residuals(anova_D),
 
 \FloatBarrier
 
-**Interprétation du test de Shapiro-Wilk**
-
 **Interprétation du QQ-plot**
+
+Les points sont globalement alignés sur la droite théorique de normalité. De légers écarts sont observés aux extrémités de la distribution, mais aucune déviation majeure n'est constatée.
+
+L'analyse graphique est cohérente avec les résultats du test de Shapiro-Wilk.
+
+\textcolor{red}{L'hypothèse de normalité des résidus est considérée comme acceptable pour l'analyse D.}
 
 **Homoscédasticité**
 
@@ -1235,6 +1379,18 @@ abline(h = 0,
 
 **Interprétation du graphique des résidus**
 
+Les résidus sont répartis de part et d'autre de la ligne horizontale correspondant à une valeur résiduelle nulle.
+
+Leur amplitude reste faible, avec des valeurs comprises approximativement entre -0,06 et 0,06.
+
+La dispersion des résidus apparaît relativement homogène pour les différentes valeurs ajustées, malgré quelques variations entre les groupes.
+
+Aucune structure particulière ni forme d'entonnoir n'est clairement observée.
+
+L'analyse graphique ne met donc pas en évidence de violation majeure de l'hypothèse d'homoscédasticité.
+
+Toutefois, cette observation doit être complétée par le test de Bartlett afin d'évaluer statistiquement l'homogénéité des variances.
+
 **Test de Bartlett**
 
 Les hypothèses du test sont les suivantes :
@@ -1261,363 +1417,101 @@ kable(tableau_bartlett_D,
       row.names = FALSE)
 ```
 
-**Interprétation du test de Bartlett**
-
-**Indépendance des erreurs**
-
-L'indépendance des erreurs repose sur les conditions de préparation des prélèvements et sur la randomisation de l'ordre des mesures.
-
-**Limite liée au caractère destructif de la méthode**
-
-La variabilité résiduelle peut inclure à la fois la variabilité propre au système de mesure et celle liée à l'hétérogénéité des prélèvements.
-
-La vérification des hypothèses statistiques ne permet pas de démontrer l'homogénéité des prélèvements issus d'un même lot.
-
-Le faible nombre de répétitions limite également la puissance des tests statistiques.
-
-\FloatBarrier
 
 ### Gage R&R imbriqué
 
 L'étude Gage R\&R est réalisée à l'aide d'un modèle à effets aléatoires imbriqués.
 
-L'estimation des composantes de variance est réalisée par la méthode du maximum de vraisemblance restreint
-(REML).
-
-L'intervalle de tolérance est calculé de la manière suivante :
-
-$$
-T = LSS - LSI = 105 - 95 = 10
-$$
-
-```{r msa-d-gage}
-modele_D <- lmer(
-  Resultat ~ 1 + (1 | Technicien/lots),
-  data = data_D,
-  REML = TRUE
-)
-
-summary(modele_D)
-
-variances_D <- as.data.frame(VarCorr(modele_D))
-
-kable(variances_D,
-      digits = 6,
-      caption = "Composantes de variance du modèle imbriqué",
-      row.names = FALSE)
-
-isSingular(modele_D)
-```
-
-**Calcul des composantes de variance**
-
-```{r msa-d-composantes}
-var_repeat_D <- sigma(modele_D)^2
-
-var_reprod_D <- variances_D$vcov[
-  variances_D$grp == "Technicien"
-]
-
-var_lots_D <- variances_D$vcov[
-  variances_D$grp %in% c(
-    "lots:Technicien",
-    "Technicien:lots"
-  )
-]
-
-var_gage_D <- var_repeat_D + var_reprod_D
-
-var_total_D <- var_gage_D + var_lots_D
-
-composantes_D <- data.frame(
-  Source = c(
-    "Total Gage R&R",
-    "Répétabilité",
-    "Reproductibilité",
-    "Lots imbriqués",
-    "Variation totale"
-  ),
-  VarComp = c(
-    var_gage_D,
-    var_repeat_D,
-    var_reprod_D,
-    var_lots_D,
-    var_total_D
-  )
-)
-
-composantes_D$Contribution <-
-  100 * composantes_D$VarComp / var_total_D
-
-composantes_D$StdDev <-
-  sqrt(composantes_D$VarComp)
-
-composantes_D$StudyVar <-
-  6 * composantes_D$StdDev
-
-composantes_D$Pourcentage_StudyVar <-
-  100 * composantes_D$StdDev / sqrt(var_total_D)
-
-composantes_D$Pourcentage_Tolerance <-
-  100 * composantes_D$StudyVar / 10
-
-kable(composantes_D,
-      digits = 4,
-      col.names = c(
-        "Source",
-        "VarComp",
-        "Contribution (%)",
-        "StdDev",
-        "StudyVar",
-        "% StudyVar",
-        "% Tolerance"
-      ),
-      caption = "Résultats du Gage R&R imbriqué",
-      row.names = FALSE)
-```
-
-**Nombre de catégories distinctes**
-
-```{r msa-d-ndc}
-ndc_D <- if (var_gage_D > 0) {
-  max(1, floor(1.41 * sqrt(var_lots_D / var_gage_D)))
-} else {
-  NA_real_
-}
-
-kable(
-  data.frame(
-    Indicateur = "Nombre de catégories distinctes",
-    Valeur = ndc_D
-  ),
-  caption = "Capacité théorique de discrimination",
-  row.names = FALSE
+```{r msa-d-gage, fig.width=12, fig.height=8, out.width="100%"}
+gage_D <- ss.rr(
+  var = Resultat,
+  part = lots,
+  appr = Technicien,
+  lsl = 95,
+  usl = 105,
+  sigma = 6,
+  tolerance = 105 - 95,
+  data = MSA_D,
+  main = "Gage R&R imbriqué - Analyse D",
+  sub = "Dosage des protéines totales",
+  alphaLim = 0.05,
+  errorTerm = "interaction",
+  digits = 4,
+  method = "nested",
+  print_plot = TRUE,
+  signifstars = FALSE
 )
 ```
-
-Dans cette approche alternative, le nombre de catégories distinctes est calculé à partir de la variance des groupes imbriqués et non de la variance inter-lots isolée.
-
-Les indicateurs du Gage R\&R imbriqué doivent donc être interprétés avec prudence.
 
 **Répétabilité**
 
+La répétabilité représente 0,2 % de la variance totale, avec un écart-type de 0,04498.
+
+Le pourcentage de variation de l'étude associé à la répétabilité est de 4,42 %, tandis que le pourcentage de tolérance est de 2,70 %.
+
+Ces deux valeurs sont inférieures au seuil d'acceptabilité de 10 %.
+
+La dispersion des résultats obtenus par un même technicien sur les prélèvements issus d'un même lot est donc faible.
+
+La méthode colorimétrique présente ainsi une répétabilité satisfaisante, sous réserve de l'homogénéité des prélèvements.
+
 **Reproductibilité**
 
-**Variabilité des lots imbriqués**
+La contribution de la reproductibilité à la variance totale est estimée à 0 %.
+
+Les pourcentages de variation de l'étude et de tolérance associés à la reproductibilité sont également nuls.
+
+Ces résultats sont cohérents avec ceux de l'ANOVA imbriquée, qui ne met pas en évidence d'effet significatif du technicien.
+
+Cependant, une composante de variance estimée à zéro ne démontre pas une absence totale de variabilité entre les techniciens.
+
+**Variabilité des groupes imbriqués**
+
+La composante Part-to-Part représente 99,8 % de la variance totale, avec un pourcentage de variation de l'étude de 99,90 %.
+
+La variabilité observée est donc principalement associée aux différences entre les groupes de prélèvements.
+
+Le système de mesure semble suffisamment précis pour distinguer ces groupes.
+
+Cependant, le modèle imbriqué ne permet pas de séparer la variabilité inter-lots de l'interaction entre le lot et le technicien.
+
+**Pourcentage de contribution**
+
+La contribution totale du Gage R\&R est de 0,2 %, soit une valeur inférieure au seuil d'acceptabilité de 1 %.
+
+La variabilité attribuée au système de mesure est donc très faible par rapport à la variabilité totale observée.
+
+**Pourcentage de variation de l'étude (% StudyVar)**
+
+Le pourcentage de variation de l'étude associé au Gage R\&R est de 4,42 %.
+
+Cette valeur est inférieure au seuil de 10 %, ce qui indique que la dispersion attribuée au système de mesure est faible par rapport à la dispersion totale.
+
+**Pourcentage de tolérance (% Tolerance)**
+
+Le pourcentage de tolérance associé au Gage R\&R est de 2,70 %.
+
+La dispersion du système de mesure, calculée sur six écarts-types, est de 0,26986 point de pourcentage pour un intervalle de tolérance de 10 points.
+
+Cette valeur étant inférieure à 10 %, la précision du système de mesure apparaît adaptée aux exigences de spécification.
+
+**Nombre de catégories distinctes (ndc)**
+
+Le nombre de catégories distinctes est de 31, soit une valeur largement supérieure au
+minimum recommandé de 5.
+
+Ce résultat indique une très bonne capacité théorique de discrimination du système de
+mesure.
+
+Toutefois, cet indicateur est calculé à partir de la variabilité des groupes imbriqués. Il ne correspond donc pas strictement à la capacité de discrimination entre les lots physiques.
+
+Il ne signifie pas non plus que 31 lots différents ont été analysés.
 
 **Acceptabilité du système de mesure**
 
-**Nombre de catégories distinctes**
+Les différents indicateurs du Gage R\&R respectent les critères usuels d'acceptabilité.
 
-### Graphiques du Gage R&R imbriqué
-
-**Graphique des composantes de variation**
-
-```{r msa-d-variation, fig.width=7, fig.height=4.5, out.width="100%"}
-graph_D <- composantes_D[1:4, ]
-
-graph_D$Source <- factor(
-  graph_D$Source,
-  levels = graph_D$Source
-)
-
-ggplot(graph_D,
-       aes(x = Source,
-           y = Contribution,
-           fill = Source)) +
-  geom_col() +
-  geom_text(
-    aes(label = paste0(round(Contribution, 2), "%")),
-    vjust = -0.5
-  ) +
-  scale_fill_manual(
-    values = c("#2874A6", "#E67E22",
-               "#C0392B", "#27AE60")
-  ) +
-  scale_y_continuous(
-    expand = expansion(mult = c(0, 0.15))
-  ) +
-  labs(
-    title = "Composantes de variation",
-    x = NULL,
-    y = "Contribution à la variance totale (%)"
-  ) +
-  theme_bw() +
-  theme(
-    legend.position = "none",
-    axis.text.x = element_text(angle = 25, hjust = 1)
-  )
-```
-
-\begin{center}
-\textit{Composantes de variation de l'analyse D}
-\end{center}
-
-**Interprétation des composantes de variation**
-
-**Résultats par technicien**
-
-```{r msa-d-techniciens, out.width="100%"}
-ggplot(data_D,
-       aes(x = Technicien,
-           y = Resultat,
-           fill = Technicien)) +
-  geom_boxplot(alpha = 0.5) +
-  geom_jitter(width = 0.1, size = 2) +
-  theme_bw() +
-  labs(
-    title = "Résultats par technicien",
-    x = "Technicien",
-    y = "Teneur en protéines totales (%)"
-  ) +
-  theme(legend.position = "none")
-```
-
-\begin{center}
-\textit{Distribution des résultats par technicien}
-\end{center}
-
-**Interprétation des résultats par technicien**
-
-**Résultats par groupe imbriqué**
-
-```{r msa-d-lots-imbriques, out.width="100%"}
-ggplot(data_D,
-       aes(x = lots,
-           y = Resultat,
-           color = Technicien)) +
-  geom_point(size = 3) +
-  facet_wrap(~ Technicien) +
-  theme_bw() +
-  labs(
-    title = "Résultats par lot et par technicien",
-    x = "Lots",
-    y = "Teneur en protéines totales (%)"
-  ) +
-  theme(legend.position = "none")
-```
-
-\begin{center}
-\textit{Résultats par groupe de prélèvements imbriqué}
-\end{center}
-
-**Interprétation des résultats par groupe imbriqué**
-
-**Carte des étendues (carte R)**
-
-```{r msa-d-carte-r, out.width="100%"}
-cartes_D <- data_D %>%
-  group_by(Technicien, lots) %>%
-  summarise(
-    Moyenne = mean(Resultat),
-    Etendue = max(Resultat) - min(Resultat),
-    .groups = "drop"
-  )
-
-Rbar_D <- mean(cartes_D$Etendue)
-
-LIC_R_D <- 0
-LSC_R_D <- 3.267 * Rbar_D
-
-ggplot(cartes_D,
-       aes(x = lots,
-           y = Etendue,
-           group = Technicien)) +
-  geom_line(color = "#2874A6") +
-  geom_point(color = "#2874A6") +
-  geom_hline(
-    yintercept = Rbar_D,
-    color = "blue",
-    linetype = "dashed"
-  ) +
-  geom_hline(
-    yintercept = LSC_R_D,
-    color = "red",
-    linetype = "dashed"
-  ) +
-  geom_hline(
-    yintercept = LIC_R_D,
-    color = "red",
-    linetype = "dashed"
-  ) +
-  facet_wrap(~ Technicien) +
-  theme_bw() +
-  labs(
-    title = "Carte des étendues",
-    x = "Lots",
-    y = "Étendue"
-  )
-```
-
-\begin{center}
-\textit{Carte des étendues de l'analyse D}
-\end{center}
-
-**Interprétation de la carte des étendues**
-
-**Carte des moyennes (carte X-barre)**
-
-```{r msa-d-carte-x, out.width="100%"}
-Xbar_D <- mean(cartes_D$Moyenne)
-
-LIC_X_D <- Xbar_D - 1.880 * Rbar_D
-LSC_X_D <- Xbar_D + 1.880 * Rbar_D
-
-ggplot(cartes_D,
-       aes(x = lots,
-           y = Moyenne,
-           group = Technicien)) +
-  geom_line(color = "#2874A6") +
-  geom_point(color = "#2874A6") +
-  geom_hline(
-    yintercept = Xbar_D,
-    color = "blue",
-    linetype = "dashed"
-  ) +
-  geom_hline(
-    yintercept = LSC_X_D,
-    color = "red",
-    linetype = "dashed"
-  ) +
-  geom_hline(
-    yintercept = LIC_X_D,
-    color = "red",
-    linetype = "dashed"
-  ) +
-  facet_wrap(~ Technicien) +
-  theme_bw() +
-  labs(
-    title = "Carte des moyennes",
-    x = "Lots",
-    y = "Moyenne"
-  )
-```
-
-\begin{center}
-\textit{Carte des moyennes de l'analyse D}
-\end{center}
-
-**Interprétation de la carte des moyennes**
-
-Les constantes utilisées pour les cartes de contrôle correspondent à des sous-groupes de deux mesures :
-
-- $D_3 = 0$ ;
-- $D_4 = 3,267$ ;
-- $A_2 = 1,880$.
-
-Ces cartes constituent des outils de diagnostic du système de mesure et non des cartes de suivi chronologique du procédé.
-
-\FloatBarrier
-
-### Interprétation et recommandations
-
-**Interprétation globale**
-
-**Limites de l'étude**
-
-**Recommandations**
-
-**Conclusion de l'analyse D**
+\textcolor{red}{Le système de mesure présente une faible variabilité, une répétabilité satisfaisante et une très bonne capacité théorique de discrimination selon le modèle imbriqué étudié.}
 
 \newpage
 
@@ -1637,6 +1531,14 @@ data_E <- MSA_E %>%
 kable(data_E[, c("Technicien", "lots", "Runs", "Resultat")],
       caption = "Données expérimentales de l'analyse E")
 ```
+
+```{r msa-e-specifications-graphique}
+graphique_specifications(data_E, "Teneur en conservateur (%)")
+```
+
+\begin{center}
+\textit{Distribution des mesures du conservateur avec les limites de spécification}
+\end{center}
 
 L'analyse E porte sur le dosage du conservateur par chromatographie liquide haute performance avec détection UV (HPLC-UV), par rapport à un étalon de référence.
 
@@ -1708,12 +1610,71 @@ ggplot(data_E, aes(x = lots,
 \FloatBarrier
 
 **Comparaison des moyennes entre les techniciens**
+Les moyennes obtenues par les trois techniciens sont relativement proches :
+
+- Jeanne : 102,074 % ;
+- Julia : 100,888 % ;
+- Mathilde : 100,550 %.
+
+Jeanne présente la moyenne la plus élevée, tandis que Mathilde présente la moyenne la plus faible.
+
+L'écart maximal entre les moyennes est de 1,524 point de pourcentage.
+
+Ces différences pourraient suggérer une influence du technicien sur les résultats du dosage du conservateur. Toutefois, l'analyse de variance est nécessaire pour déterminer si ces différences sont statistiquement significatives.
 
 **Comparaison de la dispersion des résultats**
 
+Les écarts-types obtenus sont les suivants :
+
+- Jeanne : 3,623 ;
+- Julia : 3,859 ;
+- Mathilde : 4,573.
+
+Mathilde présente la dispersion la plus importante, tandis que Jeanne présente la dispersion la plus faible.
+
+Les résultats de Mathilde s'étendent de 94,674 % à 107,374 %, soit une amplitude de 12,700 points de pourcentage.
+
+Cependant, les écarts-types calculés par technicien incluent également la variabilité entre les lots. Ils ne permettent donc pas d'évaluer directement la répétabilité du système de mesure.
+
 **Analyse graphique des résultats**
+La représentation graphique met en évidence des différences entre les lots, mais également entre les mesures réalisées au sein d'un même lot.
+
+Le lot Q475J présente une dispersion relativement limitée par rapport aux autres lots.
+
+Le lot Q562A présente une dispersion plus importante, avec des différences entre les répétitions.
+
+Le lot X584G présente la dispersion la plus élevée, avec des résultats compris approximativement entre 98 % et 110 %.
+
+Une différence importante est notamment observée entre les deux répétitions réalisées par Julia pour ce lot.
+
+Le lot Y717T présente également une dispersion importante, avec une valeur inférieure à 95 % obtenue par Mathilde.
+
+Ces observations suggèrent une possible variabilité de répétabilité et une influence potentielle du technicien.
+
+Cependant, le caractère destructif de la méthode ne permet pas d'exclure une contribution liée à l'hétérogénéité des prélèvements.
 
 **Respect des spécifications**
+
+Les limites de spécification du dosage du conservateur sont fixées entre 95 et 105 %.
+
+Plusieurs résultats se situent en dehors de cet intervalle :
+
+- Jeanne présente une valeur maximale de
+ 109,952 %, supérieure à la limite supérieure.
+
+- Julia présente une valeur maximale de
+  108,812 %, supérieure à la limite supérieure.
+
+- Mathilde présente une valeur maximale de
+  107,374 %, supérieure à la limite supérieure,
+  ainsi qu'une valeur minimale de 94,674 %,
+  inférieure à la limite inférieure.
+
+Les dépassements de la limite supérieure concernent principalement le lot X584G.
+
+Ces résultats constituent des écarts aux spécifications. Toutefois, à ce stade, il n'est pas possible de déterminer si ces écarts proviennent réellement des lots, du système de mesure ou de l'hétérogénéité des prélèvements.
+
+\textcolor{red}{L'analyse descriptive met en évidence une dispersion importante des résultats et plusieurs dépassements des limites de spécification. Une étude Gage R\&R est nécessaire afin d'évaluer la contribution du système de mesure à cette variabilité.}
 
 ### Analyse de variance imbriquée
 
@@ -1782,10 +1743,35 @@ kable(resultats_anova_E,
 ```
 
 **Influence du technicien**
+La p-value associée au facteur technicien est de 0,81344, largement supérieure au seuil de significativité de 0,05.
+
+L'hypothèse nulle n'est donc pas rejetée. Aucune différence statistiquement significative n'est mise en évidence entre les trois techniciens.
+
+La faible valeur de la statistique de Fisher (F = 0,21129) indique que la variabilité entre les techniciens est faible par rapport à celle des groupes de prélèvements imbriqués.
+
+Cependant, l'absence de différence significative ne permet pas de démontrer l'équivalence des techniciens ni de garantir une bonne reproductibilité du système de mesure.
 
 **Influence du lot imbriqué dans le technicien**
+La p-value associée au facteur lot imbriqué est de 0,08585, supérieure au seuil de significativité de 0,05.
+
+L'hypothèse nulle n'est donc pas rejetée. Aucune différence statistiquement significative n'est mise en évidence entre les groupes de prélèvements imbriqués dans les techniciens.
+
+Toutefois, cette p-value est relativement proche du seuil de significativité. Une influence des groupes de prélèvements ne peut donc pas être totalement exclue.
+
+La statistique de Fisher (F = 2,33758) indique que la variabilité entre les groupes imbriqués est supérieure à la variabilité résiduelle, mais cette différence n'est pas statistiquement significative au seuil de 5 %.
+
+La variabilité résiduelle importante pourrait limiter la capacité du système de mesure à distinguer les groupes de prélèvements.
 
 **Conclusion de l'ANOVA**
+L'analyse de variance imbriquée ne met en évidence aucun effet statistiquement significatif du technicien ou des groupes de prélèvements au seuil de 5 %.
+
+La variabilité résiduelle importante pourrait masquer les différences entre les groupes et limiter la capacité de discrimination du système de mesure.
+
+Le faible nombre de lots et de répétitions limite également la puissance de l'analyse statistique.
+
+De plus, le modèle imbriqué ne permet pas de distinguer la variabilité inter-lots de l'interaction entre le lot et le technicien.
+
+\textcolor{red}{Les résultats de l'ANOVA suggèrent un potentiel problème de répétabilité du système de mesure. La vérification des hypothèses et l'étude Gage R\&R sont nécessaires afin de confirmer cette observation et d'évaluer son acceptabilité.}
 
 ### Vérification des hypothèses
 
@@ -1833,8 +1819,24 @@ qqline(residuals(anova_E),
 \FloatBarrier
 
 **Interprétation du test de Shapiro-Wilk**
+Le test de Shapiro-Wilk fournit une statistique W de 0,9922 et une p-value de 0,9993.
+
+La p-value étant largement supérieure au seuil de significativité de 0,05, l'hypothèse nulle de normalité des résidus n'est pas rejetée.
+
+De plus, la statistique W est très proche de 1, ce qui traduit une bonne concordance entre la distribution observée des résidus et une distribution normale.
+
+Toutefois, le faible nombre d'observations limite la puissance du test statistique.
 
 **Interprétation du QQ-plot**
+Les points sont très majoritairement alignés sur la droite théorique de normalité.
+
+De légers écarts sont observés aux extrémités de la distribution, notamment pour les résidus les plus faibles et les plus élevés.
+
+Cependant, aucune déviation majeure par rapport à la distribution normale n'est observée.
+
+L'analyse graphique est donc cohérente avec les résultats du test de Shapiro-Wilk.
+
+\textcolor{red}{L'hypothèse de normalité des résidus est considérée comme acceptable pour l'analyse E.}
 
 **Homoscédasticité**
 
@@ -1861,6 +1863,24 @@ abline(h = 0,
 \FloatBarrier
 
 **Interprétation du graphique des résidus**
+Les résidus sont répartis de part et d'autre de la ligne horizontale correspondant à une valeur résiduelle nulle.
+
+Leur amplitude est relativement importante, avec des valeurs comprises approximativement entre -5,5 et 5,5 points de pourcentage.
+
+La dispersion des résidus n'apparaît pas parfaitement homogène pour l'ensemble des valeurs ajustées.
+
+En particulier, une dispersion importante est observée pour les valeurs ajustées proches de 103,5 % et de 106,5 %.
+
+À l'inverse, certains groupes présentent des résidus beaucoup plus proches de zéro.
+
+Aucune forme d'entonnoir régulière n'est clairement identifiable. Cependant, les différences de dispersion entre les groupes suggèrent une possible hétéroscédasticité.
+
+Cette observation pourrait traduire une variation de la répétabilité du système de mesure selon les groupes de prélèvements ou les niveaux de concentration.
+
+Le caractère destructif de la méthode analytique pourrait également contribuer à cette variabilité, notamment en cas
+d'hétérogénéité des prélèvements.
+
+\textcolor{red}{L'analyse graphique soulève un doute concernant l'homogénéité des variances. Le test de Bartlett est nécessaire pour compléter cette observation.}
 
 **Test de Bartlett**
 
@@ -1887,363 +1907,191 @@ kable(tableau_bartlett_E,
       caption = "Test d'homogénéité des variances",
       row.names = FALSE)
 ```
-
-**Interprétation du test de Bartlett**
-
-**Indépendance des erreurs**
-
-L'indépendance des erreurs repose sur les conditions de préparation des prélèvements et sur la randomisation de l'ordre des mesures.
-
-**Limite liée au caractère destructif de la méthode**
-
-La variabilité résiduelle peut inclure à la fois la variabilité propre au système de mesure et celle liée à l'hétérogénéité des prélèvements.
-
-La vérification des hypothèses statistiques ne permet pas de démontrer l'homogénéité des prélèvements issus d'un même lot.
-
-Le faible nombre de répétitions limite également la puissance des tests statistiques.
-
 \FloatBarrier
 
 ### Gage R&R imbriqué
 
 L'étude Gage R\&R est réalisée à l'aide d'un modèle à effets aléatoires imbriqués.
 
-L'estimation des composantes de variance est réalisée par la méthode du maximum de vraisemblance restreint
-(REML).
-
-L'intervalle de tolérance est calculé de la manière suivante :
-
-$$
-T = LSS - LSI = 105 - 95 = 10
-$$
-
-```{r msa-e-gage}
-modele_E <- lmer(
-  Resultat ~ 1 + (1 | Technicien/lots),
-  data = data_E,
-  REML = TRUE
-)
-
-summary(modele_E)
-
-variances_E <- as.data.frame(VarCorr(modele_E))
-
-kable(variances_E,
-      digits = 6,
-      caption = "Composantes de variance du modèle imbriqué",
-      row.names = FALSE)
-
-isSingular(modele_E)
-```
-
-**Calcul des composantes de variance**
-
-```{r msa-e-composantes}
-var_repeat_E <- sigma(modele_E)^2
-
-var_reprod_E <- variances_E$vcov[
-  variances_E$grp == "Technicien"
-]
-
-var_lots_E <- variances_E$vcov[
-  variances_E$grp %in% c(
-    "lots:Technicien",
-    "Technicien:lots"
-  )
-]
-
-var_gage_E <- var_repeat_E + var_reprod_E
-
-var_total_E <- var_gage_E + var_lots_E
-
-composantes_E <- data.frame(
-  Source = c(
-    "Total Gage R&R",
-    "Répétabilité",
-    "Reproductibilité",
-    "Lots imbriqués",
-    "Variation totale"
-  ),
-  VarComp = c(
-    var_gage_E,
-    var_repeat_E,
-    var_reprod_E,
-    var_lots_E,
-    var_total_E
-  )
-)
-
-composantes_E$Contribution <-
-  100 * composantes_E$VarComp / var_total_E
-
-composantes_E$StdDev <-
-  sqrt(composantes_E$VarComp)
-
-composantes_E$StudyVar <-
-  6 * composantes_E$StdDev
-
-composantes_E$Pourcentage_StudyVar <-
-  100 * composantes_E$StdDev / sqrt(var_total_E)
-
-composantes_E$Pourcentage_Tolerance <-
-  100 * composantes_E$StudyVar / 10
-
-kable(composantes_E,
-      digits = 4,
-      col.names = c(
-        "Source",
-        "VarComp",
-        "Contribution (%)",
-        "StdDev",
-        "StudyVar",
-        "% StudyVar",
-        "% Tolerance"
-      ),
-      caption = "Résultats du Gage R&R imbriqué",
-      row.names = FALSE)
-```
-
-**Nombre de catégories distinctes**
-
-```{r msa-e-ndc}
-ndc_E <- if (var_gage_E > 0) {
-  max(1, floor(1.41 * sqrt(var_lots_E / var_gage_E)))
-} else {
-  NA_real_
-}
-
-kable(
-  data.frame(
-    Indicateur = "Nombre de catégories distinctes",
-    Valeur = ndc_E
-  ),
-  caption = "Capacité théorique de discrimination",
-  row.names = FALSE
+```{r msa-e-gage, fig.width=12, fig.height=8, out.width="100%"}
+gage_E <- ss.rr(
+  var = Resultat,
+  part = lots,
+  appr = Technicien,
+  lsl = 95,
+  usl = 105,
+  sigma = 6,
+  tolerance = 105 - 95,
+  data = MSA_E,
+  main = "Gage R&R imbriqué - Analyse E",
+  sub = "Dosage du conservateur par HPLC-UV",
+  alphaLim = 0.05,
+  errorTerm = "interaction",
+  digits = 4,
+  method = "nested",
+  print_plot = TRUE,
+  signifstars = FALSE
 )
 ```
-
-Dans cette approche alternative, le nombre de catégories distinctes est calculé à partir de la variance des groupes imbriqués et non de la variance inter-lots isolée.
-
-Les indicateurs du Gage R\&R imbriqué doivent donc être interprétés avec prudence.
 
 **Répétabilité**
 
+La répétabilité représente 59,92 % de la variance totale, avec un écart-type de 3,21959.
+
+Le pourcentage de variation de l'étude associé à la répétabilité est de 77,41 %, tandis que le pourcentage de tolérance atteint 193,18 %.
+
+Ces deux valeurs sont largement supérieures au seuil de non-acceptabilité de 30 %.
+
+La dispersion des résultats obtenus par un même technicien sur les prélèvements issus d'un même lot est donc importante.
+
+La répétabilité constitue la principale source de variabilité attribuée au système de mesure.
+
+Toutefois, en raison du caractère destructif de la méthode analytique, cette composante peut également inclure la variabilité liée à l'hétérogénéité des prélèvements.
+
 **Reproductibilité**
 
-**Variabilité des lots imbriqués**
+La contribution de la reproductibilité à la variance totale est estimée à 0 %.
+
+Les pourcentages de variation de l'étude et de tolérance associés à la reproductibilité sont également nuls.
+
+Ces résultats sont cohérents avec ceux de l'ANOVA imbriquée, qui ne met pas en évidence d'effet significatif du technicien.
+
+Cependant, une composante de variance estimée à zéro ne démontre pas une absence totale de variabilité entre les techniciens.
+
+La forte variabilité résiduelle peut notamment masquer certaines différences entre les techniciens.
+
+**Variabilité des groupes imbriqués**
+
+La composante Part-to-Part représente 40,08 % de la variance totale, avec un pourcentage de variation de l'étude de 63,31 %.
+
+La variabilité attribuée au système de mesure est donc supérieure à celle des groupes de prélèvements.
+
+Cette situation limite la capacité du système de mesure à distinguer les différences entre les groupes étudiés.
+
+De plus, le modèle imbriqué ne permet pas de séparer la variabilité inter-lots de l'interaction entre le lot et le technicien.
+
+**Pourcentage de contribution**
+
+La contribution totale du Gage R\&R est de 59,92 %, soit une valeur largement supérieure au seuil de non-acceptabilité de 9 %.
+
+Plus de la moitié de la variance totale observée est ainsi attribuée au système de mesure selon le modèle étudié.
+
+**Pourcentage de variation de l'étude (% StudyVar)**
+
+Le pourcentage de variation de l'étude associé au Gage R\&R est de 77,41 %.
+
+Cette valeur est largement supérieure au seuil de non-acceptabilité de 30 %.
+
+La dispersion du système de mesure est donc trop importante par rapport à la dispersion totale observée.
+
+**Pourcentage de tolérance (% Tolerance)**
+
+Le pourcentage de tolérance associé au Gage R\&R est de 193,18 %.
+
+La dispersion du système de mesure, calculée sur six écarts-types, est de 19,31756 points de pourcentage pour un intervalle de tolérance de seulement 10 points.
+
+La dispersion attribuée au système de mesure représente donc près de deux fois la largeur de l'intervalle de spécification.
+
+Cette situation présente un risque important de décisions erronées concernant la conformité des lots.
+
+Un lot conforme pourrait être déclaré non conforme et, inversement, un lot non conforme pourrait être déclaré conforme.
+
+**Nombre de catégories distinctes (ndc)**
+
+Le nombre de catégories distinctes est de 1, soit une valeur inférieure au minimum recommandé de 5.
+
+Le système de mesure ne présente donc pas une capacité de discrimination suffisante entre les groupes de prélèvements étudiés.
+
+La variabilité attribuée au système de mesure est trop importante pour distinguer de manière fiable plusieurs niveaux de concentration.
 
 **Acceptabilité du système de mesure**
 
-**Nombre de catégories distinctes**
+Aucun des indicateurs globaux du Gage R\&R ne respecte les critères usuels d'acceptabilité.
 
-### Graphiques du Gage R&R imbriqué
+La répétabilité constitue la principale source de variabilité identifiée.
 
-**Graphique des composantes de variation**
+\textcolor{red}{Le système de mesure associé au dosage du conservateur par HPLC-UV est considéré comme non acceptable selon les critères du Gage R\&R imbriqué. Des actions correctives sont nécessaires avant de pouvoir garantir la fiabilité des décisions de conformité.}
 
-```{r msa-e-variation, fig.width=7, fig.height=4.5, out.width="100%"}
-graph_E <- composantes_E[1:4, ]
-
-graph_E$Source <- factor(
-  graph_E$Source,
-  levels = graph_E$Source
-)
-
-ggplot(graph_E,
-       aes(x = Source,
-           y = Contribution,
-           fill = Source)) +
-  geom_col() +
-  geom_text(
-    aes(label = paste0(round(Contribution, 2), "%")),
-    vjust = -0.5
-  ) +
-  scale_fill_manual(
-    values = c("#2874A6", "#E67E22",
-               "#C0392B", "#27AE60")
-  ) +
-  scale_y_continuous(
-    expand = expansion(mult = c(0, 0.15))
-  ) +
-  labs(
-    title = "Composantes de variation",
-    x = NULL,
-    y = "Contribution à la variance totale (%)"
-  ) +
-  theme_bw() +
-  theme(
-    legend.position = "none",
-    axis.text.x = element_text(angle = 25, hjust = 1)
-  )
-```
-
-\begin{center}
-\textit{Composantes de variation de l'analyse E}
-\end{center}
-
-**Interprétation des composantes de variation**
-
-**Résultats par technicien**
-
-```{r msa-e-techniciens, out.width="100%"}
-ggplot(data_E,
-       aes(x = Technicien,
-           y = Resultat,
-           fill = Technicien)) +
-  geom_boxplot(alpha = 0.5) +
-  geom_jitter(width = 0.1, size = 2) +
-  theme_bw() +
-  labs(
-    title = "Résultats par technicien",
-    x = "Technicien",
-    y = "Teneur en conservateur (%)"
-  ) +
-  theme(legend.position = "none")
-```
-
-\begin{center}
-\textit{Distribution des résultats par technicien}
-\end{center}
-
-**Interprétation des résultats par technicien**
-
-**Résultats par groupe imbriqué**
-
-```{r msa-e-lots-imbriques, out.width="100%"}
-ggplot(data_E,
-       aes(x = lots,
-           y = Resultat,
-           color = Technicien)) +
-  geom_point(size = 3) +
-  facet_wrap(~ Technicien) +
-  theme_bw() +
-  labs(
-    title = "Résultats par lot et par technicien",
-    x = "Lots",
-    y = "Teneur en conservateur (%)"
-  ) +
-  theme(legend.position = "none")
-```
-
-\begin{center}
-\textit{Résultats par groupe de prélèvements imbriqué}
-\end{center}
-
-**Interprétation des résultats par groupe imbriqué**
-
-**Carte des étendues (carte R)**
-
-```{r msa-e-carte-r, out.width="100%"}
-cartes_E <- data_E %>%
-  group_by(Technicien, lots) %>%
-  summarise(
-    Moyenne = mean(Resultat),
-    Etendue = max(Resultat) - min(Resultat),
-    .groups = "drop"
-  )
-
-Rbar_E <- mean(cartes_E$Etendue)
-
-LIC_R_E <- 0
-LSC_R_E <- 3.267 * Rbar_E
-
-ggplot(cartes_E,
-       aes(x = lots,
-           y = Etendue,
-           group = Technicien)) +
-  geom_line(color = "#2874A6") +
-  geom_point(color = "#2874A6") +
-  geom_hline(
-    yintercept = Rbar_E,
-    color = "blue",
-    linetype = "dashed"
-  ) +
-  geom_hline(
-    yintercept = LSC_R_E,
-    color = "red",
-    linetype = "dashed"
-  ) +
-  geom_hline(
-    yintercept = LIC_R_E,
-    color = "red",
-    linetype = "dashed"
-  ) +
-  facet_wrap(~ Technicien) +
-  theme_bw() +
-  labs(
-    title = "Carte des étendues",
-    x = "Lots",
-    y = "Étendue"
-  )
-```
-
-\begin{center}
-\textit{Carte des étendues de l'analyse E}
-\end{center}
-
-**Interprétation de la carte des étendues**
-
-**Carte des moyennes (carte X-barre)**
-
-```{r msa-e-carte-x, out.width="100%"}
-Xbar_E <- mean(cartes_E$Moyenne)
-
-LIC_X_E <- Xbar_E - 1.880 * Rbar_E
-LSC_X_E <- Xbar_E + 1.880 * Rbar_E
-
-ggplot(cartes_E,
-       aes(x = lots,
-           y = Moyenne,
-           group = Technicien)) +
-  geom_line(color = "#2874A6") +
-  geom_point(color = "#2874A6") +
-  geom_hline(
-    yintercept = Xbar_E,
-    color = "blue",
-    linetype = "dashed"
-  ) +
-  geom_hline(
-    yintercept = LSC_X_E,
-    color = "red",
-    linetype = "dashed"
-  ) +
-  geom_hline(
-    yintercept = LIC_X_E,
-    color = "red",
-    linetype = "dashed"
-  ) +
-  facet_wrap(~ Technicien) +
-  theme_bw() +
-  labs(
-    title = "Carte des moyennes",
-    x = "Lots",
-    y = "Moyenne"
-  )
-```
-
-\begin{center}
-\textit{Carte des moyennes de l'analyse E}
-\end{center}
-
-**Interprétation de la carte des moyennes**
-
-Les constantes utilisées pour les cartes de contrôle correspondent à des sous-groupes de deux mesures :
-
-- $D_3 = 0$ ;
-- $D_4 = 3,267$ ;
-- $A_2 = 1,880$.
-
-Ces cartes constituent des outils de diagnostic du système de mesure et non des cartes de suivi chronologique du procédé.
-
-\FloatBarrier
 
 ### Interprétation et recommandations
 
 **Interprétation globale**
 
+L'étude du système de mesure associé au dosage du conservateur par HPLC-UV met en évidence des performances insuffisantes.
+
+L'ANOVA imbriquée ne met en évidence aucun effet statistiquement significatif du technicien ou des groupes de prélèvements au seuil de 5 %.
+
+L'analyse des résidus ne remet pas en cause l'hypothèse de normalité. Cependant, des différences de dispersion entre les groupes soulèvent un doute concernant l'homoscédasticité.
+
+L'étude Gage R\&R montre que 59,92 % de la variance totale est attribuée au système de mesure.
+
+Le pourcentage de variation de l'étude de 77,41 % et le pourcentage de tolérance de 193,18 % dépassent largement les seuils d'acceptabilité.
+
+Le nombre de catégories distinctes égal à 1 confirme une capacité de discrimination insuffisante.
+
+La répétabilité constitue la principale source de variabilité identifiée par le modèle imbriqué.
+
 **Limites de l'étude**
+
+Plusieurs limites doivent être prises en considération :
+
+- Le nombre de lots analysés est limité à quatre, contre six annoncés dans les consignes.
+
+- Seulement deux répétitions sont réalisées par lot et par technicien, ce qui limite la précision des estimations statistiques.
+
+- Le caractère destructif de la méthode ne permet pas de dissocier complètement la variabilité analytique de celle liée à l'hétérogénéité des prélèvements.
+
+- Les lots physiques sont communs aux trois techniciens. Le modèle imbriqué ne permet donc pas d'isoler l'interaction entre le lot et le technicien.
+
+- La forte variabilité résiduelle peut masquer certaines différences entre les techniciens.
+
+- L'homogénéité des variances reste incertaine au regard de l'analyse graphique des résidus.
+
+- L'étude Gage R\&R ne permet pas d'évaluer directement la justesse du système de mesure.
 
 **Recommandations**
 
+Afin d'améliorer les performances du système de mesure, plusieurs actions correctives sont recommandées :
+
+- Vérifier l'homogénéité des prélèvements issus d'un même lot, notamment pour le lot X584G.
+
+- Standardiser les étapes de préparation des échantillons, notamment les pesées, les dilutions et l'homogénéisation.
+
+- Vérifier la stabilité des solutions préparées et des étalons de référence.
+
+- Contrôler la répétabilité des injections chromatographiques à partir d'une même solution.
+
+- Vérifier les performances du système d'injection, du détecteur UV et de la colonne chromatographique.
+
+- Contrôler les paramètres d'intégration des pics chromatographiques.
+
+- Vérifier les performances du matériel volumétrique utilisé lors de la préparation des échantillons.
+
+- Harmoniser les pratiques analytiques entre les techniciens.
+
+- Augmenter le nombre de lots étudiés, idéalement jusqu'à dix lots représentatifs de la variabilité du procédé.
+
+- Augmenter le nombre de répétitions, idéalement à trois par groupe.
+
+- Randomiser l'ordre de réalisation des analyses.
+
+- Comparer les résultats du modèle imbriqué à ceux du modèle croisé.
+
+- Réaliser une nouvelle étude Gage R\&R après la mise en place des actions correctives.
+
+Une étude complémentaire permettant de comparer des injections répétées d'une même solution et des préparations
+indépendantes d'un même lot permettrait de mieux identifier l'origine de la variabilité observée.
+
 **Conclusion de l'analyse E**
+
+L'étude Gage R\&R imbriquée montre que le système de mesure associé au dosage du conservateur par HPLC-UV présente des performances insuffisantes.
+
+La variabilité attribuée au système de mesure est trop importante par rapport à celle des groupes de prélèvements et à l'intervalle de tolérance.
+
+La répétabilité constitue la principale source de variabilité identifiée, tandis que la capacité de discrimination est insuffisante.
+
+L'utilisation de cette méthode pour statuer sur la conformité des lots présente donc un risque important de décisions erronées.
+
+\textcolor{red}{Le système de mesure est considéré comme non acceptable selon les critères du Gage R\&R imbriqué. Des investigations et des actions correctives doivent être réalisées afin d'améliorer la répétabilité et de garantir la fiabilité des résultats analytiques. Une nouvelle étude Gage R\&R devra être réalisée pour vérifier l'efficacité de ces actions.}
 
 \newpage
